@@ -5,7 +5,7 @@ import cors from "cors";
 import userRoutes from "./routes/userRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 
-import { errorHandler } from "./middlewares/errorMiddleware.js";
+import {errorHandler} from "./middlewares/errorMiddleware.js";
 const app = express();
 
 app.use(

@@ -10,7 +10,7 @@ import {
 } from "../validators/userValidators.ts";
 import { AppError } from "../utils/AppError.js";
 
-const JWT_SECRET = process.env.JWT_SECRET;
+// Resolve JWT secret at call time to allow tests to override env per test
 
 // ----------------------------
 // Register User
@@ -19,6 +19,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // --- REGISTER USER ---
 export const registerUser = async (req, res, next) => {
   try {
+    const JWT_SECRET = process.env.JWT_SECRET;
     // 1️⃣ Validate request body
     const validatedData = createUserSchema.parse(req.body);
     const { email, password, firstName, lastName, phone, address, isAdmin } =
@@ -66,7 +67,10 @@ export const registerUser = async (req, res, next) => {
     }
 
     const token = jwt.sign(
-      { userId: user.id, isAdmin: user.isAdmin },
+      {
+        id: user.id, // Change from userId to id for consistency
+        isAdmin: user.isAdmin,
+      },
       JWT_SECRET,
       { expiresIn: "1h" }
     );
@@ -102,6 +106,7 @@ export const registerUser = async (req, res, next) => {
 // ----------------------------
 export const loginUser = async (req, res, next) => {
   try {
+    const JWT_SECRET = process.env.JWT_SECRET;
     const validatedData = loginUserSchema.parse(req.body);
     const { email, password } = validatedData;
 
@@ -117,7 +122,10 @@ export const loginUser = async (req, res, next) => {
       );
 
     const token = jwt.sign(
-      { userId: user.id, isAdmin: user.isAdmin },
+      {
+        id: user.id, // Change from userId to id for consistency
+        isAdmin: user.isAdmin,
+      },
       JWT_SECRET,
       { expiresIn: "1h" }
     );
@@ -144,23 +152,55 @@ export const loginUser = async (req, res, next) => {
 // ----------------------------
 export const changeUserPassword = async (req, res, next) => {
   try {
-    const { oldPassword, newPassword } = changePasswordSchema.parse(req.body);
+    // Debug: Check what's in req.user
+    console.log("Request user:", req.user);
+
+    if (!req.user || !req.user.userId) {
+      return next(new AppError("Authentication required", 401));
+    }
+
+    // Validate request body
+    const validationResult = changePasswordSchema.safeParse(req.body);
+
+    if (!validationResult.success) {
+      console.log("Validation errors:", validationResult.error.errors);
+      return next(validationResult.error);
+    }
+
+    const { oldPassword, newPassword } = validationResult.data;
     const userId = req.user.userId;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return next(new AppError("User not found", 404));
+    console.log("Looking for user with ID:", userId); // Debug log
 
-    const isMatch = await bcrypt.compare(oldPassword, user.passwordHash);
-    if (!isMatch) return next(new AppError("Old password is incorrect", 400));
-
-    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-
-    await prisma.user.update({
+    // Find user
+    const user = await prisma.user.findUnique({
       where: { id: userId },
-      data: { passwordHash: hashedNewPassword },
     });
 
-    res.status(200).json({ message: "Password updated successfully" });
+    if (!user) {
+      console.log("User not found with ID:", userId); // Debug log
+      return next(new AppError("User not found", 404));
+    }
+
+    // Verify old password
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return next(new AppError("Old password is incorrect", 400));
+    }
+
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedNewPassword },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Password updated successfully",
+    });
   } catch (error) {
     console.error("Change password error:", error);
     next(error);
@@ -185,7 +225,12 @@ export const logoutUser = async (req, res, next) => {
 // ----------------------------
 export const getCurrentUser = async (req, res, next) => {
   try {
-    const userId = req.user.userId;
+    console.log("Full user object from request:", req.user); // Debug log
+
+    // Try different possible properties
+    const userId = req.user.id;
+    console.log("Extracted userId:", userId); // Debug log
+
     if (!userId) return next(new AppError("Invalid user", 400));
 
     const user = await prisma.user.findUnique({

@@ -1,9 +1,10 @@
+import e from "express";
 import { prisma } from "../lib/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
 import { updateUserSchema } from "../validators/userValidators.ts";
 
 // --- GET SINGLE USER ---
-export const getUserById = async (req, res) => {
+export const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -30,7 +31,7 @@ export const getUserById = async (req, res) => {
 };
 
 // --- GET ALL USERS ---
-export const getAllUsers = async (_req, res) => {
+export const getAllUsers = async (_req, res, next) => {
   try {
     const users = await prisma.user.findMany({
       select: {
@@ -54,7 +55,7 @@ export const getAllUsers = async (_req, res) => {
 };
 
 // --- DELETE USER ---
-export const deleteUser = async (req, res) => {
+export const deleteUser = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -75,7 +76,7 @@ export const deleteUser = async (req, res) => {
 };
 
 // --- UPDATE USER ---
-export const updateUser = async (req, res) => {
+export const updateUser = async (req, res, next) => {
   try {
     // validate and parse parameters and body
     const { id } = req.params;
@@ -115,36 +116,65 @@ export const updateUser = async (req, res) => {
 
 export const uploadUserProfileImage = async (req, res, next) => {
   try {
-    const userId = req.user?.id; //
+    console.log("Request user object:", req.user); // Debug log
+
+    const userId = req.user.id;
+
+    if (!userId) {
+      console.error("No user ID found in request");
+      return next(new AppError("User not authenticated", 401));
+    }
 
     if (!req.file) {
       return next(new AppError("No file uploaded", 400));
     }
 
-    const { path: filePath, size } = req.file;
+    const { filename } = req.file;
 
-    // 1️⃣ Optional: Remove existing profile image for this user
-    await prisma.image.updateMany({
-      where: { userId, isMain: true },
-      data: { isMain: false },
+    // Verify user exists (double check)
+    const userExists = await prisma.user.findUnique({
+      where: { id: userId },
     });
 
-    // 2️⃣ Create new image record
+    if (!userExists) {
+      return next(new AppError("User not found", 404));
+    }
+
+    // Delete all existing images for this user
+    const deleteResult = await prisma.image.deleteMany({
+      where: { userId: userId },
+    });
+
+    console.log(
+      `Deleted ${deleteResult.count} existing images for user ${userId}`
+    );
+
+    // Create new image
     const newImage = await prisma.image.create({
       data: {
-        url: filePath,
+        url: filename,
         userId: userId,
-        isMain: true,
-        fileSize: size,
       },
     });
 
+    console.log("Successfully created image with userId:", newImage.userId);
+
     res.status(200).json({
+      success: true,
       message: "Profile image uploaded successfully",
-      image: newImage,
+      data: newImage,
     });
   } catch (error) {
-    console.error(error);
-    next(error);
+    console.error("Upload profile image error:", error);
+
+    if (error.code === "P2002") {
+      return next(new AppError("Image already exists", 400));
+    }
+
+    if (error.code === "P2003") {
+      return next(new AppError("Invalid user reference", 400));
+    }
+
+    next(new AppError("Server error during image upload", 500));
   }
 };

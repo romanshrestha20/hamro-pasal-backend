@@ -1,56 +1,55 @@
-// middleware/errorMiddleware.js
-
+// middlewares/errorMiddleware.js
 export const errorHandler = (err, req, res, next) => {
-  console.error("🔥 Error:", err);
+  console.error('Error name:', err.name);
+  console.error('Error message:', err.message);
 
-  // Default response structure
-  let statusCode = 500;
-  let message = "Internal Server Error";
+  let statusCode = err.statusCode || 500;
+  let message = err.message || 'Internal Server Error';
 
-  // --- Prisma known errors ---
-  if (err.code) {
-    switch (err.code) {
-      case "P2002": // Unique constraint failed
-        statusCode = 409;
-        message = "Duplicate entry detected.";
-        break;
-      case "P2025": // Record not found
-        statusCode = 404;
-        message = "Record not found.";
-        break;
-      default:
-        message = `Database error (${err.code})`;
-        break;
+  // Handle Zod errors safely
+  if (err.name === 'ZodError') {
+    statusCode = 400;
+    
+    // Safe handling - check if errors array exists
+    if (err.errors && Array.isArray(err.errors)) {
+      message = err.errors.map(e => {
+        const path = e.path?.join('.') || 'field';
+        return `${path}: ${e.message}`;
+      }).join(', ');
+    } else {
+      message = 'Validation error';
     }
   }
 
-  // --- Zod validation errors ---
-  if (err.name === "ZodError") {
+  // Handle other error types
+  if (err.code === 'P2002') {
     statusCode = 400;
-    message = "Validation failed.";
-    return res.status(statusCode).json({
-      message,
-      errors: err.errors.map((e) => ({
-        field: e.path.join("."),
-        message: e.message,
-      })),
-    });
+    message = 'Duplicate entry';
   }
 
-  // --- JWT / Auth errors ---
-  if (err.name === "JsonWebTokenError") {
+  if (err.code === 'P2025') {
+    statusCode = 404;
+    message = 'Record not found';
+  }
+
+  if (err.name === 'JsonWebTokenError') {
     statusCode = 401;
-    message = "Invalid or expired token.";
+    message = 'Invalid token';
   }
 
-  // --- Custom app errors ---
-  if (err.statusCode) {
-    statusCode = err.statusCode;
-    message = err.message || message;
+  if (err.name === 'TokenExpiredError') {
+    statusCode = 401;
+    message = 'Token expired';
   }
 
   res.status(statusCode).json({
     success: false,
-    message,
+    error: message,
+    ...(process.env.NODE_ENV === 'development' && { 
+      stack: err.stack
+    })
   });
 };
+
+// Make sure you're exporting it correctly
+export default errorHandler; // This should be default export

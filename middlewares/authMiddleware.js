@@ -1,29 +1,51 @@
 import jwt from "jsonwebtoken";
+import { prisma } from "../lib/prismaClient.js";
+import { AppError } from "../utils/AppError.js";
 
-const JWT_SECRET = process.env.JWT_SECRET;
+export const authenticate = async (req, res, next) => {
+  try {
+    const token = req.header("Authorization")?.replace("Bearer ", "");
 
-export const authenticate = (req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
+    if (!token) {
+      return next(new AppError("Access denied. No token provided.", 401));
+    }
 
-  if (!token) return res.status(401).json({ message: "No token provided" });
-  if (!JWT_SECRET)
-    return res
-      .status(500)
-      .json({ message: "JWT_SECRET is not defined in environment variables" });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ message: "Invalid token" });
+    // Verify that the token has the required id field
+    if (!decoded.id) {
+      return next(new AppError("Invalid token payload", 401));
+    }
 
-    req.user = user; // attach user to request
+    // Set req.user with both id and userId for compatibility
+    req.user = {
+      id: decoded.id,
+      userId: decoded.id, // Include for compatibility with changePassword
+      isAdmin: decoded.isAdmin,
+    };
+
     next();
-  });
+  } catch (error) {
+    if (error.name === "JsonWebTokenError") {
+      return next(new AppError("Invalid token", 401));
+    }
+
+    if (error.name === "TokenExpiredError") {
+      return next(new AppError("Token expired", 401));
+    }
+
+    next(new AppError("Authentication failed", 401));
+  }
 };
 
 export const authorizeAdmin = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ message: "Not authenticated" });
-  if (!req.user.isAdmin)
+  if (!req.user) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+
+  if (!req.user.isAdmin) {
     return res.status(403).json({ message: "Forbidden: Admins only" });
+  }
 
   next();
 };

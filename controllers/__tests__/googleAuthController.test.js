@@ -45,6 +45,7 @@ describe("googleAuthController", () => {
     res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
+      cookie: jest.fn(),
     };
     next = jest.fn();
     jest.clearAllMocks();
@@ -129,6 +130,12 @@ describe("googleAuthController", () => {
           token: mockAppToken,
           user: mockCreatedUser,
         });
+        expect(res.cookie).toHaveBeenCalledWith("token", mockAppToken, {
+          httpOnly: true,
+          secure: false, // NODE_ENV is not production in tests
+          sameSite: "strict",
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
         expect(next).not.toHaveBeenCalled();
       });
 
@@ -192,6 +199,12 @@ describe("googleAuthController", () => {
           message: "Google login successful",
           token: mockAppToken,
           user: mockExistingUser,
+        });
+        expect(res.cookie).toHaveBeenCalledWith("token", mockAppToken, {
+          httpOnly: true,
+          secure: false,
+          sameSite: "strict",
+          maxAge: 7 * 24 * 60 * 60 * 1000,
         });
         expect(next).not.toHaveBeenCalled();
       });
@@ -494,7 +507,134 @@ describe("googleAuthController", () => {
     });
 
     describe("Edge cases", () => {
-      it("should handle empty string token", async () => {
+      it("should set secure cookie flag in production environment", async () => {
+        const originalEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = "production";
+
+        const mockGoogleToken = "mock-google-token";
+        const mockPayload = {
+          sub: "google-user-id-prod",
+          email: "produser@gmail.com",
+          name: "Prod User",
+        };
+
+        const mockUser = {
+          id: "prod-user-id",
+          email: "produser@gmail.com",
+          isAdmin: false,
+        };
+
+        req.body.token = mockGoogleToken;
+
+        mockVerifyIdToken.mockResolvedValue({
+          getPayload: () => mockPayload,
+        });
+
+        prisma.user.findUnique.mockResolvedValue(mockUser);
+        jwt.sign.mockReturnValue("prod-token");
+
+        await googleAuth(req, res, next);
+
+        expect(res.cookie).toHaveBeenCalledWith("token", "prod-token", {
+          httpOnly: true,
+          secure: true, // Should be true in production
+          sameSite: "strict",
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        // Restore original environment
+        process.env.NODE_ENV = originalEnv;
+      });
+
+      it("should set httpOnly flag to prevent XSS attacks", async () => {
+        const mockGoogleToken = "mock-google-token";
+        const mockPayload = {
+          sub: "google-user-id-xss-test",
+          email: "xsstest@gmail.com",
+          name: "XSS Test User",
+        };
+
+        const mockUser = {
+          id: "xss-test-user-id",
+          email: "xsstest@gmail.com",
+          isAdmin: false,
+        };
+
+        req.body.token = mockGoogleToken;
+
+        mockVerifyIdToken.mockResolvedValue({
+          getPayload: () => mockPayload,
+        });
+
+        prisma.user.findUnique.mockResolvedValue(mockUser);
+        jwt.sign.mockReturnValue("xss-test-token");
+
+        await googleAuth(req, res, next);
+
+        const cookieCall = res.cookie.mock.calls[0];
+        expect(cookieCall[2]).toHaveProperty("httpOnly", true);
+      });
+
+      it("should set sameSite to strict to prevent CSRF", async () => {
+        const mockGoogleToken = "mock-google-token";
+        const mockPayload = {
+          sub: "google-user-id-csrf-test",
+          email: "csrftest@gmail.com",
+          name: "CSRF Test User",
+        };
+
+        const mockUser = {
+          id: "csrf-test-user-id",
+          email: "csrftest@gmail.com",
+          isAdmin: false,
+        };
+
+        req.body.token = mockGoogleToken;
+
+        mockVerifyIdToken.mockResolvedValue({
+          getPayload: () => mockPayload,
+        });
+
+        prisma.user.findUnique.mockResolvedValue(mockUser);
+        jwt.sign.mockReturnValue("csrf-test-token");
+
+        await googleAuth(req, res, next);
+
+        const cookieCall = res.cookie.mock.calls[0];
+        expect(cookieCall[2]).toHaveProperty("sameSite", "strict");
+      });
+
+      it("should set cookie maxAge to 7 days", async () => {
+        const mockGoogleToken = "mock-google-token";
+        const mockPayload = {
+          sub: "google-user-id-maxage-test",
+          email: "maxagetest@gmail.com",
+          name: "MaxAge Test User",
+        };
+
+        const mockUser = {
+          id: "maxage-test-user-id",
+          email: "maxagetest@gmail.com",
+          isAdmin: false,
+        };
+
+        req.body.token = mockGoogleToken;
+
+        mockVerifyIdToken.mockResolvedValue({
+          getPayload: () => mockPayload,
+        });
+
+        prisma.user.findUnique.mockResolvedValue(mockUser);
+        jwt.sign.mockReturnValue("maxage-test-token");
+
+        await googleAuth(req, res, next);
+
+        const cookieCall = res.cookie.mock.calls[0];
+        const expectedMaxAge = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+        expect(cookieCall[2]).toHaveProperty("maxAge", expectedMaxAge);
+      });
+
+      it("should empty string token", async () => {
         req.body.token = "";
 
         await googleAuth(req, res, next);

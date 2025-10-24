@@ -4,7 +4,7 @@ CREATE TABLE "users" (
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
     "email" TEXT NOT NULL,
-    "password" TEXT,
+    "password" TEXT NOT NULL,
     "provider" TEXT,
     "providerId" TEXT,
     "isAdmin" BOOLEAN NOT NULL DEFAULT false,

@@ -75,6 +75,14 @@ export const registerUser = async (req, res, next) => {
       { expiresIn: "1h" }
     );
 
+    // Set HTTP-only cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 60 * 1000, // 1 hour (matches JWT expiry)
+    });
+
     // 7️⃣ Respond
     res.status(201).json({
       message: "User registered successfully",
@@ -129,6 +137,14 @@ export const loginUser = async (req, res, next) => {
       JWT_SECRET,
       { expiresIn: "1h" }
     );
+
+    // Set HTTP-only cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 60 * 1000, // 1 hour (matches JWT expiry)
+    });
 
     res.status(200).json({
       message: "Login successful",
@@ -212,8 +228,17 @@ export const changeUserPassword = async (req, res, next) => {
 // ----------------------------
 export const logoutUser = async (req, res, next) => {
   try {
-    // Token invalidation is handled on client side
-    res.status(200).json({ message: "Logout successful" });
+    // Clear the HTTP-only cookie
+    res.clearCookie("token", {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production", // Match cookie settings
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Logged out successfully",
+    });
   } catch (error) {
     console.error("Logout error:", error);
     next(error);

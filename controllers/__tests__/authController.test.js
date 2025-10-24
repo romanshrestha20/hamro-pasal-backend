@@ -56,6 +56,8 @@ describe("AuthController", () => {
     res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
+      cookie: jest.fn(),
+      clearCookie: jest.fn(),
     };
     next = jest.fn();
     jest.clearAllMocks();
@@ -94,6 +96,12 @@ describe("AuthController", () => {
       });
       expect(bcrypt.hash).toHaveBeenCalledWith(validUserData.password, 10);
       expect(prisma.user.create).toHaveBeenCalled();
+      expect(res.cookie).toHaveBeenCalledWith("token", "test-token", {
+        httpOnly: true,
+        secure: false,
+        sameSite: "strict",
+        maxAge: 60 * 60 * 1000, // 1 hour
+      });
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({
         message: "User registered successfully",
@@ -193,6 +201,12 @@ describe("AuthController", () => {
         loginData.password,
         mockUser.password
       );
+      expect(res.cookie).toHaveBeenCalledWith("token", "test-token", {
+        httpOnly: true,
+        secure: false,
+        sameSite: "strict",
+        maxAge: 60 * 60 * 1000, // 1 hour
+      });
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         message: "Login successful",
@@ -324,10 +338,33 @@ describe("AuthController", () => {
     it("should logout user successfully", async () => {
       await logoutUser(req, res, next);
 
+      expect(res.clearCookie).toHaveBeenCalledWith("token", {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: false, // NODE_ENV is not production in tests
+      });
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
-        message: "Logout successful",
+        success: true,
+        message: "Logged out successfully",
       });
+    });
+
+    it("should logout user with secure cookie in production", async () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = "production";
+
+      await logoutUser(req, res, next);
+
+      expect(res.clearCookie).toHaveBeenCalledWith("token", {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: true, // Should be true in production
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+
+      // Restore environment
+      process.env.NODE_ENV = originalEnv;
     });
   });
 

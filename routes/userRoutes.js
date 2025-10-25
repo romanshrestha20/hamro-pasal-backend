@@ -7,23 +7,23 @@ import {
   uploadUserProfileImage,
 } from "../controllers/usersController.js";
 
-import { authenticate, authorizeAdmin } from "../middlewares/authMiddleware.js";
+import { authEither, authorizeAdmin } from "../middlewares/authMiddleware.js";
 import { upload } from "../utils/uploads.js";
 
 const router = express.Router();
 
-// Admin-only route: must authenticate first
-router.get("/all", authenticate, authorizeAdmin, getAllUsers);
+// Admin-only route: must authenticate (cookie or header) first
+router.get("/all", authEither, authorizeAdmin, getAllUsers);
 
-// Protect  user routes: optional, but usually you want only the owner or admin
-router.get("/:id", authenticate, getUserById);
-router.put("/:id", authenticate, updateUser);
-router.delete("/:id", authenticate, deleteUser);
+// Protect user routes: allow auth via cookie or header
+router.get("/:id", authEither, getUserById);
+router.put("/:id", authEither, updateUser);
+router.delete("/:id", authEither, deleteUser);
 
 // image upload
 router.post(
   "/upload",
-  authenticate,
+  authEither,
   upload.single("image"),
   uploadUserProfileImage
 );

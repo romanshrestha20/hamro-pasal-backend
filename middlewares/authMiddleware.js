@@ -86,3 +86,24 @@ export const requireAuth = (req, res, next) => {
     next(new AppError("Authentication failed", 401));
   }
 };
+
+// Combined middleware: prefer cookie-based auth, fall back to header-based
+export const authEither = async (req, res, next) => {
+  try {
+    // If cookie token exists, use requireAuth
+    if (req.cookies && req.cookies.token) {
+      return requireAuth(req, res, next);
+    }
+
+    // Otherwise, try Authorization header
+    const authHeader = req.header("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      // authenticate is async
+      return await authenticate(req, res, next);
+    }
+
+    return next(new AppError("Access denied. No token provided.", 401));
+  } catch (error) {
+    return next(error);
+  }
+};

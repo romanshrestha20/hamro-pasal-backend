@@ -9,6 +9,11 @@ import {
   userIdParamSchema,
 } from "../validators/userValidators.ts";
 import { AppError } from "../utils/AppError.js";
+import crypto from "crypto";
+import {
+  sendPasswordResetEmail,
+  sendPasswordResetConfirmation,
+} from "../utils/emailService.js";
 
 // Resolve JWT secret at call time to allow tests to override env per test
 
@@ -276,6 +281,140 @@ export const getCurrentUser = async (req, res, next) => {
     res.status(200).json(user);
   } catch (error) {
     console.error("Get current user error:", error);
+    next(error);
+  }
+};
+
+// ----------------------------
+// Forgot Password (Request Reset)
+// ----------------------------
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return next(new AppError("Email is required", 400));
+    }
+
+    // Find user by email
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    // Always return success (security: don't reveal if email exists)
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message: "If that email exists, a password reset link has been sent.",
+      });
+    }
+
+    // Generate random token (32 bytes = 64 hex chars)
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    // Hash token for storage
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    // Set expiration (1 hour from now)
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    // Delete any existing reset tokens for this user
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id },
+    });
+
+    // Create new reset token in database
+    await prisma.passwordResetToken.create({
+      data: {
+        token: hashedToken,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    // Send email with reset link (plain token, not hashed)
+    const emailSent = await sendPasswordResetEmail(email, resetToken);
+
+    if (!emailSent) {
+      console.error("Failed to send password reset email");
+      // Don't fail the request - token is still created
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "If that email exists, a password reset link has been sent.",
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    next(error);
+  }
+};
+
+// ----------------------------
+// Reset Password (With Token)
+// ----------------------------
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return next(new AppError("Token and new password are required", 400));
+    }
+
+    // Validate password length
+    if (newPassword.length < 6) {
+      return next(new AppError("Password must be at least 6 characters", 400));
+    }
+
+    // Hash the incoming token to compare with stored hash
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    // Find valid reset token
+    const resetTokenRecord = await prisma.passwordResetToken.findUnique({
+      where: { token: hashedToken },
+      include: { user: true },
+    });
+
+    if (!resetTokenRecord) {
+      return next(new AppError("Invalid or expired reset token", 400));
+    }
+
+    // Check if token has expired
+    if (new Date() > resetTokenRecord.expiresAt) {
+      // Delete expired token
+      await prisma.passwordResetToken.delete({
+        where: { id: resetTokenRecord.id },
+      });
+      return next(new AppError("Reset token has expired", 400));
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user's password
+    await prisma.user.update({
+      where: { id: resetTokenRecord.userId },
+      data: { password: hashedPassword },
+    });
+
+    // Delete used reset token
+    await prisma.passwordResetToken.delete({
+      where: { id: resetTokenRecord.id },
+    });
+
+    // Send confirmation email
+    await sendPasswordResetConfirmation(resetTokenRecord.user.email);
+
+    res.status(200).json({
+      success: true,
+      message: "Password has been reset successfully. You can now login.",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
     next(error);
   }
 };

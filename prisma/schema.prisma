@@ -28,9 +28,23 @@ model User {
   images     Image[]
   orders     Order[]
   reviews    Review[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique // Hashed token
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
 
 model Product {
   id          String      @id @default(uuid())

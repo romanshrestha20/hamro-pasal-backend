@@ -3,6 +3,18 @@ import { prisma } from "../lib/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
 import { updateUserSchema } from "../validators/userValidators.ts";
 
+const getBaseOrigin = (req) => {
+  const proto = req?.headers?.["x-forwarded-proto"] || req?.protocol || "http";
+  const forwardedHost = req?.headers?.["x-forwarded-host"];
+  const headerHost = req?.headers?.host;
+  let host = forwardedHost || headerHost;
+  if (!host && typeof req?.get === "function") {
+    host = req.get("host");
+  }
+  if (!host) host = "localhost:4000"; // sensible default for tests/dev
+  return `${proto}://${host}`;
+};
+
 // --- GET SINGLE USER ---
 export const getUserById = async (req, res, next) => {
   try {
@@ -17,13 +29,30 @@ export const getUserById = async (req, res, next) => {
         email: true,
         phone: true,
         address: true,
+        image: true,
         isAdmin: true,
         createdAt: true,
         updatedAt: true,
       },
     });
     if (!user) throw new AppError("User not found", 404);
-    res.status(200).json(user);
+    const origin = getBaseOrigin(req);
+    const profilePicture = user.image
+      ? `${origin}/uploads/${user.image}`
+      : undefined;
+
+    res.status(200).json({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone,
+      address: user.address,
+      isAdmin: user.isAdmin,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      profilePicture,
+    });
   } catch (error) {
     console.error(error);
     next(error);
@@ -41,13 +70,27 @@ export const getAllUsers = async (_req, res, next) => {
         email: true,
         phone: true,
         address: true,
+        image: true,
         isAdmin: true,
         createdAt: true,
         updatedAt: true,
       },
     });
+    const origin = getBaseOrigin(_req);
+    const mapped = users.map((u) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      email: u.email,
+      phone: u.phone,
+      address: u.address,
+      isAdmin: u.isAdmin,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+      profilePicture: u.image ? `${origin}/uploads/${u.image}` : undefined,
+    }));
 
-    res.status(200).json(users);
+    res.status(200).json(mapped);
   } catch (error) {
     console.error(error);
     next(error);
@@ -118,7 +161,7 @@ export const uploadUserProfileImage = async (req, res, next) => {
   try {
     console.log("Request user object:", req.user); // Debug log
 
-    const userId = req.user.id;
+    const userId = req?.user?.id;
 
     if (!userId) {
       console.error("No user ID found in request");
@@ -156,13 +199,26 @@ export const uploadUserProfileImage = async (req, res, next) => {
         userId: userId,
       },
     });
+    // Also persist on User.image for easy access in auth/me
+    await prisma.user.update({
+      where: { id: userId },
+      data: { image: filename },
+    });
+    const baseOrigin = getBaseOrigin(req);
+    const fileUrl = `${baseOrigin}/uploads/${newImage.url}`;
 
     console.log("Successfully created image with userId:", newImage.userId);
 
     res.status(200).json({
       success: true,
       message: "Profile image uploaded successfully",
-      data: newImage,
+      data: {
+        id: newImage.id,
+        url: fileUrl,
+        userId: newImage.userId,
+        createdAt: newImage.createdAt,
+        updatedAt: newImage.updatedAt,
+      },
     });
   } catch (error) {
     console.error("Upload profile image error:", error);

@@ -17,6 +17,19 @@ import {
 
 // Resolve JWT secret at call time to allow tests to override env per test
 
+// Build the public origin from request (works behind proxies/CDNs)
+const getBaseOrigin = (req) => {
+  const proto = req?.headers?.["x-forwarded-proto"] || req?.protocol || "http";
+  const forwardedHost = req?.headers?.["x-forwarded-host"];
+  const headerHost = req?.headers?.host;
+  let host = forwardedHost || headerHost;
+  if (!host && typeof req?.get === "function") {
+    host = req.get("host");
+  }
+  if (!host) host = "localhost:4000";
+  return `${proto}://${host}`;
+};
+
 // ----------------------------
 // Register User
 // ----------------------------
@@ -273,12 +286,27 @@ export const getCurrentUser = async (req, res, next) => {
         phone: true,
         address: true,
         isAdmin: true,
+        image: true,
       },
     });
 
     if (!user) return next(new AppError("User not found", 404));
 
-    res.status(200).json(user);
+    const origin = getBaseOrigin(req);
+    const profileUrl = user.image
+      ? `${origin}/uploads/${user.image}`
+      : undefined;
+
+    res.status(200).json({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      address: user.address,
+      isAdmin: user.isAdmin,
+      profilePicture: profileUrl,
+    });
   } catch (error) {
     console.error("Get current user error:", error);
     next(error);

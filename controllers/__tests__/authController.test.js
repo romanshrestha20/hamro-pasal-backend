@@ -376,6 +376,7 @@ describe("AuthController", () => {
       lastName: "Doe",
       phone: "1234567890",
       address: "123 Test St",
+      image: "avatar.jpg",
       isAdmin: false,
     };
 
@@ -395,11 +396,23 @@ describe("AuthController", () => {
           lastName: true,
           phone: true,
           address: true,
+          image: true,
           isAdmin: true,
         },
       });
       expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(mockUser);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "1",
+          email: "test@example.com",
+          firstName: "John",
+          lastName: "Doe",
+          phone: "1234567890",
+          address: "123 Test St",
+          isAdmin: false,
+          profilePicture: expect.stringContaining("/uploads/avatar.jpg"),
+        })
+      );
     });
 
     it("should return error if user ID is missing", async () => {

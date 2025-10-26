@@ -57,6 +57,7 @@ describe("UsersController", () => {
       email: "john@example.com",
       phone: "1234567890",
       address: "123 Test St",
+      image: "avatar.jpg",
       isAdmin: false,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -78,13 +79,25 @@ describe("UsersController", () => {
           email: true,
           phone: true,
           address: true,
+          image: true,
           isAdmin: true,
           createdAt: true,
           updatedAt: true,
         },
       });
       expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(mockUser);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "1",
+          firstName: "John",
+          lastName: "Doe",
+          email: "john@example.com",
+          phone: "1234567890",
+          address: "123 Test St",
+          isAdmin: false,
+          profilePicture: expect.stringContaining("/uploads/avatar.jpg"),
+        })
+      );
     });
 
     it("should return error if user not found", async () => {
@@ -120,6 +133,7 @@ describe("UsersController", () => {
         email: "john@example.com",
         phone: "1234567890",
         address: "123 Test St",
+        image: "avatar1.jpg",
         isAdmin: false,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -131,6 +145,7 @@ describe("UsersController", () => {
         email: "jane@example.com",
         phone: "0987654321",
         address: "456 Test Ave",
+        image: "avatar2.jpg",
         isAdmin: true,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -150,13 +165,25 @@ describe("UsersController", () => {
           email: true,
           phone: true,
           address: true,
+          image: true,
           isAdmin: true,
           createdAt: true,
           updatedAt: true,
         },
       });
       expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(mockUsers);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "1",
+            profilePicture: expect.stringContaining("/uploads/avatar1.jpg"),
+          }),
+          expect.objectContaining({
+            id: "2",
+            profilePicture: expect.stringContaining("/uploads/avatar2.jpg"),
+          }),
+        ])
+      );
     });
 
     it("should return empty array if no users exist", async () => {
@@ -324,10 +351,13 @@ describe("UsersController", () => {
     it("should upload profile image successfully", async () => {
       req.user = { id: "1" };
       req.file = mockFile;
+      req.headers = { host: "localhost:4000" };
+      req.get = jest.fn(() => "localhost:4000");
 
       prisma.user.findUnique.mockResolvedValue(mockUser);
       prisma.image.deleteMany.mockResolvedValue({ count: 0 });
       prisma.image.create.mockResolvedValue(mockImage);
+      prisma.user.update.mockResolvedValue({});
 
       await uploadUserProfileImage(req, res, next);
 
@@ -347,7 +377,11 @@ describe("UsersController", () => {
       expect(res.json).toHaveBeenCalledWith({
         success: true,
         message: "Profile image uploaded successfully",
-        data: mockImage,
+        data: expect.objectContaining({
+          id: mockImage.id,
+          userId: mockImage.userId,
+          url: expect.stringContaining("/uploads/" + mockFile.filename),
+        }),
       });
     });
 

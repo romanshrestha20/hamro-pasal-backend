@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import path from "path";
 
 // Import routes
 import userRoutes from "./routes/userRoutes.js";
@@ -18,8 +19,12 @@ app.use(
 );
 
 app.use(express.json());
+app.set("trust proxy", 1); // trust first proxy if behind a proxy (e.g., Heroku)
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Serve uploaded files statically (e.g., http://localhost:4000/uploads/<filename>)
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 
 // Example route

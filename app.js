@@ -6,6 +6,9 @@ import path from "path";
 // Import routes
 import userRoutes from "./routes/userRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import productRoutes from "./routes/productRoutes.js";
+import favoriteRoutes from "./routes/favoriteRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
 
 import { errorHandler } from "./middlewares/errorMiddleware.js";
 const app = express();
@@ -26,7 +29,6 @@ app.use(cookieParser());
 // Serve uploaded files statically (e.g., http://localhost:4000/uploads/<filename>)
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-
 // Example route
 app.get("/", (req, res) => {
   res.send("API is running...");
@@ -36,6 +38,9 @@ app.get("/api/test", (_req, res) => res.json({ message: "CORS works!" }));
 // Use routes
 app.use("/api/users", userRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/favorites", favoriteRoutes);
+app.use("/api/orders", orderRoutes);
 
 // Handle 404 errors for undefined routes
 app.use((req, res, next) => {

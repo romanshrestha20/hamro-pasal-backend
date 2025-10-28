@@ -7,7 +7,8 @@
     "start": "nodemon server.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "db:seed": "prisma db seed"
   },
   "keywords": [],
   "author": "",
@@ -40,5 +41,8 @@
     "prisma": "^6.18.0",
     "supertest": "^7.1.4",
     "ts-node": "^10.9.2"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }

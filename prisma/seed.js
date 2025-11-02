@@ -10,7 +10,8 @@ const products = [
     price: new Prisma.Decimal("99.99"),
     rating: 4.5,
     stock: 120,
-    image: "headphones.jpg",
+    image:
+      "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop",
     tags: ["electronics", "audio"],
     isActive: true,
   },
@@ -21,7 +22,8 @@ const products = [
     price: new Prisma.Decimal("149.99"),
     rating: 4.2,
     stock: 80,
-    image: "smartwatch.jpg",
+    image:
+      "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop",
     tags: ["electronics", "wearable"],
     isActive: true,
   },
@@ -32,7 +34,8 @@ const products = [
     price: new Prisma.Decimal("39.99"),
     rating: 4.6,
     stock: 200,
-    image: "mouse.jpg",
+    image:
+      "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=400&h=400&fit=crop",
     tags: ["gaming", "accessories"],
     isActive: true,
   },
@@ -42,7 +45,8 @@ const products = [
     price: new Prisma.Decimal("79.99"),
     rating: 4.7,
     stock: 150,
-    image: "keyboard.jpg",
+    image:
+      "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=400&h=400&fit=crop",
     tags: ["gaming", "accessories"],
     isActive: true,
   },
@@ -52,7 +56,8 @@ const products = [
     price: new Prisma.Decimal("299.99"),
     rating: 4.4,
     stock: 60,
-    image: "monitor.jpg",
+    image:
+      "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=400&h=400&fit=crop",
     tags: ["electronics", "display"],
     isActive: true,
   },
@@ -62,7 +67,8 @@ const products = [
     price: new Prisma.Decimal("29.99"),
     rating: 4.1,
     stock: 300,
-    image: "hub.jpg",
+    image:
+      "https://images.unsplash.com/photo-1625948515291-69613efd103f?w=400&h=400&fit=crop",
     tags: ["accessories"],
     isActive: true,
   },
@@ -72,7 +78,8 @@ const products = [
     price: new Prisma.Decimal("119.99"),
     rating: 4.8,
     stock: 90,
-    image: "ssd.jpg",
+    image:
+      "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?w=400&h=400&fit=crop",
     tags: ["storage"],
     isActive: true,
   },
@@ -82,7 +89,8 @@ const products = [
     price: new Prisma.Decimal("49.99"),
     rating: 4.3,
     stock: 180,
-    image: "speaker.jpg",
+    image:
+      "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=400&h=400&fit=crop",
     tags: ["audio"],
     isActive: true,
   },

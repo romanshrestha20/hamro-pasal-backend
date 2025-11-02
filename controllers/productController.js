@@ -1,5 +1,4 @@
 import { prisma } from "../lib/prismaClient.js";
-import { Prisma } from "@prisma/client";
 import { AppError } from "../utils/AppError.js";
 
 export const createProduct = async (req, res, next) => {
@@ -115,7 +114,9 @@ export const deleteProduct = async (req, res, next) => {
 };
 
 export const searchProducts = async (req, res, next) => {
-  const { q } = req.query;
+  // Support both /search?q=query and /search/:query formats
+  const q = req.query.q || req.params.query;
+
   try {
     if (!q || String(q).trim().length === 0) {
       return res.status(200).json([]);

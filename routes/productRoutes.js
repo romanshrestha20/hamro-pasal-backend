@@ -7,6 +7,7 @@ import {
   deleteProduct,
   searchProducts,
   getAllCategories,
+  getProductsbyCategory,
   createCategory,
 } from "../controllers/productController.js";
 
@@ -16,12 +17,17 @@ const router = express.Router();
 
 // Public routes
 router.get("/", getProducts);
-router.get("/:id", getProductById);
-router.get("/search/:query", searchProducts);
 
-// Category routes
+// Category routes (MUST come before /:id to avoid conflicts)
 router.get("/categories", getAllCategories);
 router.post("/categories", authEither, authorizeAdmin, createCategory);
+router.get("/category/:categoryId", getProductsbyCategory);
+
+// Search route (MUST come before /:id)
+router.get("/search/:query", searchProducts);
+
+// Dynamic routes (MUST come last)
+router.get("/:id", getProductById);
 
 // Admin-only routes
 router.post("/", authEither, authorizeAdmin, createProduct);

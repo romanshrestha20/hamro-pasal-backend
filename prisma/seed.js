@@ -2,6 +2,15 @@ import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const categories = [
+  { name: "Electronics" },
+  { name: "Audio" },
+  { name: "Gaming" },
+  { name: "Accessories" },
+  { name: "Storage" },
+  { name: "Display" },
+];
+
 const products = [
   {
     name: "Wireless Headphones",
@@ -97,17 +106,111 @@ const products = [
 ];
 
 async function main() {
-  console.log("Seeding products...");
-  // Clear existing data (order matters if there are FKs)
+  console.log("Seeding database...");
+
+  // Clear existing data (order matters for foreign keys)
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
   await prisma.favorite.deleteMany();
   await prisma.product.deleteMany();
+  await prisma.category.deleteMany();
 
-  await prisma.product.createMany({ data: products });
+  // Create categories first
+  console.log("Creating categories...");
+  const createdCategories = await prisma.category.createMany({
+    data: categories,
+    skipDuplicates: true,
+  });
+  console.log(`Created ${createdCategories.count} categories.`);
 
-  const count = await prisma.product.count();
-  console.log(`Seeded ${count} products.`);
+  // Fetch created categories to get their IDs
+  const allCategories = await prisma.category.findMany();
+  const categoryMap = {
+    Electronics: allCategories.find((c) => c.name === "Electronics")?.id,
+    Audio: allCategories.find((c) => c.name === "Audio")?.id,
+    Gaming: allCategories.find((c) => c.name === "Gaming")?.id,
+    Accessories: allCategories.find((c) => c.name === "Accessories")?.id,
+    Storage: allCategories.find((c) => c.name === "Storage")?.id,
+    Display: allCategories.find((c) => c.name === "Display")?.id,
+  };
+
+  // Create products with category associations
+  console.log("Creating products...");
+
+  await prisma.product.create({
+    data: {
+      ...products[0],
+      categories: {
+        connect: [{ id: categoryMap.Electronics }, { id: categoryMap.Audio }],
+      },
+    },
+  });
+
+  await prisma.product.create({
+    data: {
+      ...products[1],
+      categories: {
+        connect: [{ id: categoryMap.Electronics }],
+      },
+    },
+  });
+
+  await prisma.product.create({
+    data: {
+      ...products[2],
+      categories: {
+        connect: [{ id: categoryMap.Gaming }, { id: categoryMap.Accessories }],
+      },
+    },
+  });
+
+  await prisma.product.create({
+    data: {
+      ...products[3],
+      categories: {
+        connect: [{ id: categoryMap.Gaming }, { id: categoryMap.Accessories }],
+      },
+    },
+  });
+
+  await prisma.product.create({
+    data: {
+      ...products[4],
+      categories: {
+        connect: [{ id: categoryMap.Electronics }, { id: categoryMap.Display }],
+      },
+    },
+  });
+
+  await prisma.product.create({
+    data: {
+      ...products[5],
+      categories: {
+        connect: [{ id: categoryMap.Accessories }],
+      },
+    },
+  });
+
+  await prisma.product.create({
+    data: {
+      ...products[6],
+      categories: {
+        connect: [{ id: categoryMap.Electronics }, { id: categoryMap.Storage }],
+      },
+    },
+  });
+
+  await prisma.product.create({
+    data: {
+      ...products[7],
+      categories: {
+        connect: [{ id: categoryMap.Audio }],
+      },
+    },
+  });
+
+  const productCount = await prisma.product.count();
+  console.log(`Seeded ${productCount} products with categories.`);
 }
 
 main()

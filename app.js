@@ -14,10 +14,24 @@ import cartRoutes from "./routes/cartRoutes.js";
 import { errorHandler } from "./middlewares/errorMiddleware.js";
 const app = express();
 
+// CORS: Allow multiple dev and deployment origins
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  process.env.FRONTEND_ORIGIN,
+  process.env.FRONTEND_ORIGIN_1,
+  process.env.FRONTEND_ORIGIN_2,
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: "http://localhost:3000", // allow frontend
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: (origin, callback) => {
+      // Allow non-browser requests (e.g., curl, Postman) with no origin
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   })
 );

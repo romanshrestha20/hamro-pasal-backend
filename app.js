@@ -41,14 +41,15 @@ app.set("trust proxy", 1); // trust first proxy if behind a proxy (e.g., Heroku)
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Serve uploaded files statically (e.g., http://localhost:4000/uploads/<filename>)
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
-
 // Example route
 app.get("/", (req, res) => {
   res.send("API is running...");
 });
 app.get("/api/test", (_req, res) => res.json({ message: "CORS works!" }));
+
+// Serve uploaded files statically (e.g., http://localhost:4000/uploads/<filename>)
+// Must be placed after CORS middleware to allow cross-origin image requests
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Use routes
 app.use("/api/users", userRoutes);

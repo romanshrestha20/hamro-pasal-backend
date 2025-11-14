@@ -272,7 +272,7 @@ export const clearCart = async (req, res, next) => {
       throw new AppError("Cart not found", 404);
     }
 
-    // Delete all cart items atomically
+    // Delete all cart items atomically and update cart's updatedAt
     await prisma.$transaction([
       prisma.cartItem.deleteMany({
         where: { cartId: cart.id },

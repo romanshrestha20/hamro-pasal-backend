@@ -17,13 +17,13 @@ router.use(authEither);
 router.get("/", getCart);
 
 // Add item to cart (or increment if exists)
-router.post("/items", addToCart);
+router.post("/add", addToCart);
 
 // Update cart item quantity
-router.put("/items", updateCartItem);
+router.patch("/item/:itemId", updateCartItem);
 
 // Remove item from cart
-router.delete("/items", removeFromCart);
+router.delete("/item/:itemId", removeFromCart);
 
 // Clear entire cart
 router.delete("/", clearCart);

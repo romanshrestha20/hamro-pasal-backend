@@ -10,7 +10,7 @@ import productRoutes from "./routes/productRoutes.js";
 import favoriteRoutes from "./routes/favoriteRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
-
+import reviewRoutes from "./routes/reviewRoutes.js";
 import { errorHandler } from "./middlewares/errorMiddleware.js";
 const app = express();
 
@@ -58,6 +58,7 @@ app.use("/api/products", productRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/cart", cartRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 // Handle 404 errors for undefined routes
 app.use((req, res, next) => {

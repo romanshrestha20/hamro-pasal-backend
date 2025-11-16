@@ -8,63 +8,123 @@ const computeOrderTotals = async (items = []) => {
     throw new AppError("Order must contain at least one item", 400);
   }
 
-  // Expect items: [{ productId: string, quantity: number }]
   const productIds = items.map((it) => it.productId);
+
+  // Fetch products from DB
   const products = await prisma.product.findMany({
     where: { id: { in: productIds } },
-    select: { id: true, price: true, stock: true, isActive: true },
+    select: {
+      id: true,
+      name: true,
+      image: true,
+      price: true,
+      stock: true,
+      isActive: true,
+    },
   });
 
+  // Map products by ID for quick lookup 
   const productMap = new Map(products.map((p) => [p.id, p]));
 
-  let total = new Prisma.Decimal(0);
-  const orderItemsData = items.map((it) => {
-    const p = productMap.get(it.productId);
-    if (!p) throw new AppError(`Product not found: ${it.productId}`, 404);
-    if (!p.isActive)
-      throw new AppError(`Product inactive: ${it.productId}`, 400);
-    const qty = Number(it.quantity) || 0;
-    if (qty <= 0) throw new AppError("Quantity must be greater than 0", 400);
+  // Validate items and compute totals
+  let subtotal = new Prisma.Decimal(0);
 
-    // price is taken from DB to prevent client tampering
-    const linePrice = new Prisma.Decimal(p.price);
-    const lineTotal = linePrice.mul(qty);
-    total = total.add(lineTotal);
+  // Prepare order items data with snapshots
+  const orderItemsData = items.map((it) => {
+    const product = productMap.get(it.productId);
+    if (!product) throw new AppError(`Product not found: ${it.productId}`, 404);
+    if (!product.isActive)
+      throw new AppError(`Product inactive: ${it.productId}`, 400);
+
+    // Validate quantity
+    const qty = Number(it.quantity);
+    if (qty <= 0) throw new AppError("Invalid quantity", 400);
+    if (qty > product.stock)
+      throw new AppError(`Not enough stock for product: ${product.name}`, 400);
+
+    // Compute line total
+    const unitPrice = new Prisma.Decimal(product.price);
+    const lineTotal = unitPrice.mul(qty);
+    subtotal = subtotal.add(lineTotal);
+
     return {
       productId: it.productId,
       quantity: qty,
-      price: linePrice,
+      unitPrice,
+      productName: product.name,
+      productImage: product.image,
+      subtotal: lineTotal,
     };
   });
 
-  return { total, orderItemsData };
+  // extra calculations
+  const tax = subtotal.mul(0.15); // example 15%
+  const shippingFee = new Prisma.Decimal(0);
+  const discount = new Prisma.Decimal(0);
+
+  const total = subtotal.add(tax).add(shippingFee).sub(discount);
+
+  return {
+    subtotal,
+    tax,
+    discount,
+    shippingFee,
+    total,
+    orderItemsData,
+  };
 };
 
 export const createOrder = async (req, res, next) => {
   try {
-    const userId = req?.user?.id || req?.body?.userId; // prefer authenticated user
+    const userId = req?.user?.id || req.body.userId;
     if (!userId) throw new AppError("Unauthorized", 401);
 
     const { items } = req.body;
-    const { total, orderItemsData } = await computeOrderTotals(items);
 
-    const order = await prisma.order.create({
-      data: {
-        userId,
-        total,
-        orderItems: { create: orderItemsData },
-      },
-      include: {
-        orderItems: true,
-      },
+    // Compute totals, validate data, prepare snapshots
+    const totals = await computeOrderTotals(items);
+
+    // Use transaction to ensure atomicity 
+    const result = await prisma.$transaction(async (tx) => {
+      // Decrease stock
+      for (const item of totals.orderItemsData) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { decrement: item.quantity } },
+        });
+      }
+
+      // Create order inside transaction
+      const order = await tx.order.create({
+        data: {
+          userId,
+          subtotal: totals.subtotal,
+          total: totals.total,
+          tax: totals.tax,
+          discount: totals.discount,
+          shippingFee: totals.shippingFee,
+          orderItems: {
+            create: totals.orderItemsData.map((i) => ({
+              productId: i.productId,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              subtotal: i.subtotal,
+              productName: i.productName,
+              productImage: i.productImage,
+            })),
+          },
+        },
+        include: { orderItems: true },
+      });
+
+      return order;
     });
 
-    res.status(201).json(order);
+    res.status(201).json(result);
   } catch (error) {
     next(error);
   }
 };
-
 export const getMyOrders = async (req, res, next) => {
   try {
     const userId = req?.user?.id;
@@ -74,12 +134,11 @@ export const getMyOrders = async (req, res, next) => {
       where: { userId },
       orderBy: { createdAt: "desc" },
       include: {
-        orderItems: {
-          include: { product: true },
-        },
+        orderItems: true,
         payment: true,
       },
     });
+
     res.status(200).json(orders);
   } catch (error) {
     next(error);
@@ -138,7 +197,6 @@ export const updateOrderStatus = async (req, res, next) => {
     if (!allowed.includes(status)) {
       throw new AppError("Invalid order status", 400);
     }
-
     const updated = await prisma.order.update({
       where: { id },
       data: { status },
@@ -159,9 +217,9 @@ export const cancelMyOrder = async (req, res, next) => {
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) throw new AppError("Order not found", 404);
     if (order.userId !== userId) throw new AppError("Forbidden", 403);
-    if (order.status !== "PENDING") {
-      throw new AppError("Only pending orders can be canceled", 400);
-    }
+
+    if (order.status !== "PENDING")
+      throw new AppError("Order cannot be canceled at this stage", 400);
 
     const updated = await prisma.order.update({
       where: { id },

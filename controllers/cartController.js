@@ -183,6 +183,7 @@ export const updateCartItem = async (req, res, next) => {
         cartId: cart.id,
         productId,
         quantity,
+        unitPrice: product.price,
       },
       include: {
         product: {

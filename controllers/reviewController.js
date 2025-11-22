@@ -297,54 +297,49 @@ export const getMyReviews = async (req, res, next) => {
 };
 
 /*************************************************
- * LIKE REVIEW
+ * TOGGLE REVIEW LIKE (like/unlike combined)
  *************************************************/
-export const likeReview = async (req, res, next) => {
+export const toggleReviewLike = async (req, res, next) => {
   try {
     const { reviewId } = req.params;
     const userId = req?.user?.id;
 
     if (!userId) throw new AppError("Unauthorized", 401);
 
-    const review = await prisma.review.findUnique({ where: { id: reviewId } });
+    const review = await prisma.review.findUnique({
+      where: { id: reviewId },
+    });
+
     if (!review) throw new AppError("Review not found", 404);
 
-    const exists = await prisma.reviewLike.findFirst({
+    // Check if a like exists
+    const existingLike = await prisma.reviewLike.findFirst({
       where: { reviewId, userId },
     });
 
-    if (exists) throw new AppError("You already liked this review", 400);
+    let liked = false;
 
-    await prisma.reviewLike.create({
-      data: { reviewId, userId },
+    if (existingLike) {
+      // UNLIKE
+      await prisma.reviewLike.delete({
+        where: { id: existingLike.id },
+      });
+      liked = false;
+    } else {
+      // LIKE
+      await prisma.reviewLike.create({
+        data: { reviewId, userId },
+      });
+      liked = true;
+    }
+
+    const likeCount = await prisma.reviewLike.count({
+      where: { reviewId },
     });
 
-    res.status(201).json({ liked: true });
+    res.status(200).json({ liked, likeCount });
   } catch (error) {
     next(error);
   }
 };
 
-/*************************************************
- * UNLIKE REVIEW
- *************************************************/
-export const unLikeReview = async (req, res, next) => {
-  try {
-    const { reviewId } = req.params;
-    const userId = req?.user?.id;
-
-    if (!userId) throw new AppError("Unauthorized", 401);
-
-    const like = await prisma.reviewLike.findFirst({
-      where: { reviewId, userId },
-    });
-
-    if (!like) throw new AppError("You have not liked this review", 400);
-
-    await prisma.reviewLike.delete({ where: { id: like.id } });
-
-    res.status(200).json({ liked: false });
-  } catch (error) {
-    next(error);
-  }
-};

@@ -49,13 +49,20 @@ export const getReviewReplies = async (req, res, next) => {
       where: { reviewId },
       include: {
         user: {
-          select: { id: true, firstName: true, lastName: true, email: true, image: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            image: true,
+          },
         },
         likes: true,
       },
       orderBy: { createdAt: "desc" },
     });
 
+    // Format replies to include likeCount and likedByUser
     const formatted = replies.map((reply) => ({
       ...reply,
       likeCount: reply.likes.length,
@@ -109,7 +116,9 @@ export const updateReply = async (req, res, next) => {
 
     if (!userId) throw new AppError("Unauthorized", 401);
 
-    const reply = await prisma.reviewReply.findUnique({ where: { id: replyId } });
+    const reply = await prisma.reviewReply.findUnique({
+      where: { id: replyId },
+    });
     if (!reply) throw new AppError("Reply not found", 404);
     if (reply.userId !== userId)
       throw new AppError("You can only update your own replies", 403);
@@ -119,7 +128,13 @@ export const updateReply = async (req, res, next) => {
       data: { comment },
       include: {
         user: {
-          select: { id: true, firstName: true, lastName: true, email: true, image: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            image: true,
+          },
         },
         likes: true,
       },
@@ -131,58 +146,66 @@ export const updateReply = async (req, res, next) => {
   }
 };
 
+
 /******************************************
- * LIKE A REPLY
+ * TOGGLE LIKE FOR A REVIEW REPLY
  ******************************************/
-export const likeReply = async (req, res, next) => {
+export const toggleReplyLike = async (req, res, next) => {
   try {
-    const userId = req?.user?.id;
     const { replyId } = req.params;
+    const userId = req?.user?.id;
 
     if (!userId) throw new AppError("Unauthorized", 401);
     if (!replyId) throw new AppError("Reply ID is required", 400);
 
-    const reply = await prisma.reviewReply.findUnique({ where: { id: replyId } });
+    // Ensure reply exists
+    const reply = await prisma.reviewReply.findUnique({
+      where: { id: replyId },
+    });
     if (!reply) throw new AppError("Reply not found", 404);
 
-    const existing = await prisma.reviewLike.findFirst({
-      where: { reviewReplyId: replyId, userId },
-    });
-    if (existing) throw new AppError("Already liked", 400);
-
-    await prisma.reviewLike.create({
-      data: { userId, reviewReplyId: replyId },
-    });
-
-    res.status(201).json({ liked: true });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/******************************************
- * UNLIKE A REPLY
- ******************************************/
-export const unlikeReply = async (req, res, next) => {
-  try {
-    const userId = req?.user?.id;
-    const { replyId } = req.params;
-
-    if (!userId) throw new AppError("Unauthorized", 401);
-    if (!replyId) throw new AppError("Reply ID is required", 400);
-
-    const existing = await prisma.reviewLike.findFirst({
-      where: { reviewReplyId: replyId, userId },
+    // Look for an existing like
+    const existingLike = await prisma.reviewLike.findFirst({
+      where: {
+        reviewReplyId: replyId,
+        userId,
+      },
     });
 
-    if (!existing)
-      throw new AppError("You have not liked this reply", 400);
+    let liked = false;
 
-    await prisma.reviewLike.delete({
-      where: { id: existing.id },
+    if (existingLike) {
+      // UNLIKE
+      await prisma.reviewLike.delete({
+        where: { id: existingLike.id },
+      });
+      liked = false;
+    } else {
+      // LIKE
+      await prisma.reviewLike.create({
+        data: {
+          reviewReplyId: replyId,
+          userId,
+        },
+      });
+      liked = true;
+    }
+
+    // Recompute like count
+    const likeCount = await prisma.reviewLike.count({
+      where: { reviewReplyId: replyId },
     });
 
-    res.status(200).json({ liked: false });
+    // Update reply.likesCount to stay in sync
+    await prisma.reviewReply.update({
+      where: { id: replyId },
+      data: { likesCount: likeCount },
+    });
+
+    res.status(200).json({
+      liked,
+      likeCount,
+    });
   } catch (error) {
     next(error);
   }

@@ -343,3 +343,54 @@ export const toggleReviewLike = async (req, res, next) => {
   }
 };
 
+/*************************************************
+ * LEGACY-LIKE FUNCTIONS (compatibility for tests)
+ * These provide discrete like/unlike semantics
+ * kept for backward compatibility with existing
+ * test suites expecting error on duplicate like
+*************************************************/
+export const likeReview = async (req, res, next) => {
+  try {
+    const { reviewId } = req.params;
+    const userId = req?.user?.id;
+
+    if (!userId) throw new AppError("Unauthorized", 401);
+    if (!reviewId) throw new AppError("Review ID is required", 400);
+
+    const review = await prisma.review.findUnique({ where: { id: reviewId } });
+    if (!review) throw new AppError("Review not found", 404);
+
+    const existingLike = await prisma.reviewLike.findFirst({
+      where: { reviewId, userId },
+    });
+    if (existingLike)
+      throw new AppError("You already liked this review", 400);
+
+    await prisma.reviewLike.create({ data: { reviewId, userId } });
+    res.status(201).json({ liked: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const unLikeReview = async (req, res, next) => {
+  try {
+    const { reviewId } = req.params;
+    const userId = req?.user?.id;
+
+    if (!userId) throw new AppError("Unauthorized", 401);
+    if (!reviewId) throw new AppError("Review ID is required", 400);
+
+    const existingLike = await prisma.reviewLike.findFirst({
+      where: { reviewId, userId },
+    });
+    if (!existingLike)
+      throw new AppError("You have not liked this review", 400);
+
+    await prisma.reviewLike.delete({ where: { id: existingLike.id } });
+    res.status(200).json({ liked: false });
+  } catch (error) {
+    next(error);
+  }
+};
+

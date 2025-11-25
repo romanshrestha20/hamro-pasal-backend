@@ -1,52 +1,48 @@
 import { prisma } from "../lib/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
 
-export const createProduct = async (req, res, next) => {
-  const {
-    name,
-    description,
-    price,
-    rating,
-    stock,
-    image,
-    images,
-    tags,
-    isActive,
-  } = req.body;
 
+export const createProduct = async (req, res, next) => {
   try {
+    const {
+      name,
+      description,
+      price,
+      rating,
+      stock,
+      isActive,
+      tags,
+      image,
+      galleryImages
+    } = extractCreateProductData(req);
+
     if (!name || !description || price == null) {
       throw new AppError("name, description and price are required", 400);
     }
 
-    const data = {
-      name,
-      description,
-      price: new Prisma.Decimal(String(price)),
-      rating: typeof rating === "number" ? rating : undefined,
-      stock: typeof stock === "number" ? stock : undefined,
-      image: image || undefined,
-      tags: Array.isArray(tags) ? tags : undefined,
-      isActive: typeof isActive === "boolean" ? isActive : undefined,
-    };
-
-    // Nested images create if provided as array of URLs
-    if (Array.isArray(images) && images.length > 0) {
-      data.images = {
-        create: images.filter(Boolean).map((url) => ({ url })),
-      };
-    }
-
-    const response = await prisma.product.create({
-      data,
-      include: { images: true, categories: true },
+    const product = await prisma.product.create({
+      data: {
+        name,
+        description,
+        price: new prisma.Decimal(String(price)),
+        rating: rating || undefined,
+        stock: stock || undefined,
+        isActive,
+        tags,
+        image,
+        images: {
+          create: galleryImages.map((url) => ({ url })),
+        },
+      },
+      include: { images: true }
     });
 
-    res.status(201).json(response);
-  } catch (error) {
-    next(error);
+    res.status(201).json(product);
+  } catch (err) {
+    next(err);
   }
 };
+
 
 export const getProducts = async (req, res, next) => {
   try {
@@ -207,3 +203,84 @@ export const getProductsbyCategory = async (req, res, next) => {
     next(error);
   }
 };
+
+export const getFeaturedProducts = async (req, res, next) => {
+  try {
+    const response = await prisma.product.findMany({
+      where: { isFeatured: true },
+      include: { images: true, categories: true },
+      orderBy: { createdAt: "desc" },
+    });
+    res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export function extractCreateProductData(req) {
+  const body = req.body;
+
+  // Convert numeric fields safely
+  const toNumber = (val) => {
+    if (val === null || val === undefined || val === "") return undefined;
+    const num = Number(val);
+    return isNaN(num) ? undefined : num;
+  };
+
+  // Convert boolean safely
+  const toBoolean = (val) => {
+    if (val === "true" || val === true) return true;
+    if (val === "false" || val === false) return false;
+    return undefined;
+  };
+
+  // Normalize tags: can be string, CSV, array, or undefined
+  let tags = body.tags;
+  if (typeof tags === "string") {
+    try {
+      // If admin sends JSON: "["tag1","tag2"]"
+      const parsed = JSON.parse(tags);
+      if (Array.isArray(parsed)) tags = parsed;
+    } catch {
+      // fallback: CSV "tag1, tag2"
+      tags = tags.split(",").map((t) => t.trim());
+    }
+  }
+  if (!Array.isArray(tags)) tags = undefined;
+
+  // Normalize gallery URLs if they exist in body (rare for uploads)
+  let imagesFromBody = body.images;
+  if (typeof imagesFromBody === "string") {
+    try {
+      const parsed = JSON.parse(imagesFromBody);
+      if (Array.isArray(parsed)) imagesFromBody = parsed;
+    } catch {
+      imagesFromBody = [imagesFromBody];
+    }
+  }
+  if (!Array.isArray(imagesFromBody)) imagesFromBody = [];
+
+  // When using multer: uploaded files go here
+  const imagesFromFiles = (req.files || []).map((file) => ({
+    url: `/uploads/${file.filename}`
+  }));
+
+  return {
+    name: body.name || undefined,
+    description: body.description || undefined,
+
+    price: toNumber(body.price),
+    rating: toNumber(body.rating),
+    stock: toNumber(body.stock),
+
+    isActive: toBoolean(body.isActive),
+
+    tags,
+
+    // Main image (optional)
+    image: body.image || undefined,
+
+    // Combine body URLs + uploaded files
+    galleryImages: [...imagesFromBody, ...imagesFromFiles.map((i) => i.url)],
+  };
+}

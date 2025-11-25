@@ -10,6 +10,7 @@ import {
   getProductsbyCategory,
   createCategory,
 } from "../controllers/productController.js";
+import { upload } from "../utils/uploads.js";
 
 import { authEither, authorizeAdmin } from "../middlewares/authMiddleware.js";
 
@@ -20,7 +21,13 @@ router.get("/", getProducts);
 
 // Category routes (MUST come before /:id to avoid conflicts)
 router.get("/categories", getAllCategories);
-router.post("/categories", authEither, authorizeAdmin, createCategory);
+router.post(
+  "/categories",
+  authEither,
+  authorizeAdmin,
+  upload.array("images", 10),
+  createCategory
+);
 router.get("/category/:categoryId", getProductsbyCategory);
 
 // Search route (MUST come before /:id)

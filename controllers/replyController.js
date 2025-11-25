@@ -210,3 +210,54 @@ export const toggleReplyLike = async (req, res, next) => {
     next(error);
   }
 };
+
+/******************************************
+ * LEGACY DISCRETE LIKE / UNLIKE FUNCTIONS
+ * Maintained for backward compatibility
+ * with existing test suite expectations.
+******************************************/
+export const likeReply = async (req, res, next) => {
+  try {
+    const { replyId } = req.params;
+    const userId = req?.user?.id;
+
+    if (!userId) throw new AppError("Unauthorized", 401);
+    if (!replyId) throw new AppError("Reply ID is required", 400);
+
+    const reply = await prisma.reviewReply.findUnique({ where: { id: replyId } });
+    if (!reply) throw new AppError("Reply not found", 404);
+
+    const existingLike = await prisma.reviewLike.findFirst({
+      where: { reviewReplyId: replyId, userId },
+    });
+    if (existingLike) throw new AppError("Already liked", 400);
+
+    await prisma.reviewLike.create({
+      data: { reviewReplyId: replyId, userId },
+    });
+    res.status(201).json({ liked: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const unlikeReply = async (req, res, next) => {
+  try {
+    const { replyId } = req.params;
+    const userId = req?.user?.id;
+
+    if (!userId) throw new AppError("Unauthorized", 401);
+    if (!replyId) throw new AppError("Reply ID is required", 400);
+
+    const existingLike = await prisma.reviewLike.findFirst({
+      where: { reviewReplyId: replyId, userId },
+    });
+    if (!existingLike)
+      throw new AppError("You have not liked this reply", 400);
+
+    await prisma.reviewLike.delete({ where: { id: existingLike.id } });
+    res.status(200).json({ liked: false });
+  } catch (error) {
+    next(error);
+  }
+};

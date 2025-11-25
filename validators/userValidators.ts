@@ -6,8 +6,11 @@ export const createUserSchema = z.object({
   lastName: z.string().min(2, "Last name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  phone: z.string().optional(),
-  address: z.string().optional(),
+
+  // IMPORTANT FIX
+  phone: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+
   isAdmin: z.boolean().optional().default(false),
 });
 
@@ -30,7 +33,6 @@ export const loginUserSchema = z.object({
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type LoginUserInput = z.infer<typeof loginUserSchema>;
-
 
 export const userEmailParamSchema = z.object({
   email: z.string().email("Invalid email address"),

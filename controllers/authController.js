@@ -287,6 +287,8 @@ export const getCurrentUser = async (req, res, next) => {
         address: true,
         isAdmin: true,
         image: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -306,6 +308,8 @@ export const getCurrentUser = async (req, res, next) => {
       address: user.address,
       isAdmin: user.isAdmin,
       profilePicture: profileUrl,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     });
   } catch (error) {
     console.error("Get current user error:", error);

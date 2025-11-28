@@ -2,6 +2,9 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
 
+
+
+
 export const authenticate = async (req, res, next) => {
   try {
     const token = req.header("Authorization")?.replace("Bearer ", "");
@@ -86,24 +89,36 @@ export const requireAuth = (req, res, next) => {
     next(new AppError("Authentication failed", 401));
   }
 };
+const PUBLIC_ROUTES = [
+  "/api/auth/forgot-password",
+  "/api/auth/verify-otp",
+  "/api/auth/reset-password",
+];
 
-// Combined middleware: prefer cookie-based auth, fall back to header-based
+
 export const authEither = async (req, res, next) => {
   try {
-    // If cookie token exists, use requireAuth
-    if (req.cookies && req.cookies.token) {
+    const cleanUrl = req.originalUrl.split("?")[0];
+
+    if (PUBLIC_ROUTES.some((route) => cleanUrl.startsWith(route))) {
+      return next(); // LET OTP ROUTES PASS
+    }
+    console.log("authEither invoked for URL:", cleanUrl);
+
+    // Cookie token exists?
+    if (req.cookies?.token) {
       return requireAuth(req, res, next);
     }
 
-    // Otherwise, try Authorization header
-    const authHeader = req.header("Authorization");
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      // authenticate is async
-      return await authenticate(req, res, next);
+    // Bearer token exists?
+    const header = req.header("Authorization");
+    if (header?.startsWith("Bearer ")) {
+      return authenticate(req, res, next);
     }
 
     return next(new AppError("Access denied. No token provided.", 401));
-  } catch (error) {
-    return next(error);
+  } catch (err) {
+    next(err);
   }
 };
+

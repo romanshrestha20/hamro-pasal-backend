@@ -398,6 +398,8 @@ describe("AuthController", () => {
           address: true,
           image: true,
           isAdmin: true,
+          createdAt: true,
+          updatedAt: true,
         },
       });
       expect(res.status).toHaveBeenCalledWith(200);

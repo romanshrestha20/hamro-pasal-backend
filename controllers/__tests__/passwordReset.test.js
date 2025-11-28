@@ -1,5 +1,5 @@
 // controllers/__tests__/passwordReset.test.js
-import { jest } from "@jest/globals";
+import { expect, jest } from "@jest/globals";
 
 // Mock Prisma client with the same resolved path used by the controllers
 jest.mock("../../lib/prismaClient.js", () => ({
@@ -8,8 +8,14 @@ jest.mock("../../lib/prismaClient.js", () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    otp: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      deleteMany: jest.fn(),
+      update: jest.fn(),
+    },
     passwordResetToken: {
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       create: jest.fn(),
       deleteMany: jest.fn(),
       delete: jest.fn(),
@@ -61,20 +67,20 @@ describe("Password Reset Controllers", () => {
       });
     });
 
-    it("should create token for valid user", async () => {
+    it("should create OTP for valid user", async () => {
       req.body = { email: "test@example.com" };
       prisma.user.findUnique.mockResolvedValue({
         id: "user123",
         email: "test@example.com",
       });
-      prisma.passwordResetToken.deleteMany.mockResolvedValue({});
-      prisma.passwordResetToken.create.mockResolvedValue({});
+      prisma.otp.deleteMany.mockResolvedValue({});
+      prisma.otp.create.mockResolvedValue({});
       // No need to mock crypto; we don't assert on the token value.
       sendPasswordResetEmail.mockResolvedValue(true);
 
       await forgotPassword(req, res, next);
 
-      expect(prisma.passwordResetToken.create).toHaveBeenCalled();
+      expect(prisma.otp.create).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(200);
     });
   });
@@ -84,7 +90,7 @@ describe("Password Reset Controllers", () => {
       const futureDate = new Date(Date.now() + 3600000);
       req.body = { token: "plainToken", newPassword: "newpass123" };
 
-      prisma.passwordResetToken.findUnique.mockResolvedValue({
+      prisma.passwordResetToken.findFirst.mockResolvedValue({
         id: "token123",
         userId: "user123",
         expiresAt: futureDate,
@@ -98,8 +104,13 @@ describe("Password Reset Controllers", () => {
 
       await resetPassword(req, res, next);
 
-      expect(prisma.user.update).toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(200);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "user123" },
+        data: { password: "hashedNewPassword" },
+      });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true })
+      );
     });
   });
 });

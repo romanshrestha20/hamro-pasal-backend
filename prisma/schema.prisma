@@ -24,6 +24,7 @@ model User {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   image               String?              @db.Text
+
   favorites           Favorite[]
   images              Image[]
   orders              Order[]
@@ -32,10 +33,26 @@ model User {
   cart                Cart?
   reviewsReplied      ReviewReply[]
   reviewsLiked        ReviewLike[]
+  otps                Otp[]
 
   @@unique([provider, providerId])
   @@map("users")
 }
+
+model Otp {
+  id        String   @id @default(uuid())
+  email     String?
+  phone     String?
+  otp       String      // You can hash this too if you want
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  consumed  Boolean  @default(false)
+
+  @@index([email])
+  @@index([phone])
+  users User[]
+}
+
 
 model PasswordResetToken {
   id        String   @id @default(uuid())

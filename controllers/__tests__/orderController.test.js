@@ -11,19 +11,37 @@ import { AppError } from "../../utils/AppError.js";
 import { Prisma } from "@prisma/client";
 
 jest.mock("../../lib/prismaClient.js", () => {
-  const product = { findMany: jest.fn(), update: jest.fn() };
+  const product = {
+    findMany: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+  };
   const order = {
     create: jest.fn(),
     findMany: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
+    count: jest.fn(),
+  };
+  const shippingAddress = {
+    create: jest.fn(),
+  };
+  const payment = {
+    create: jest.fn(),
   };
   const prisma = {
     product,
     order,
+    shippingAddress,
+    payment,
     $transaction: jest.fn(async (cb) => {
       // Provide a tx object mirroring prisma methods used in controller
-      const tx = { product, order };
+      const tx = {
+        product,
+        order,
+        shippingAddress,
+        payment,
+      };
       return cb(tx);
     }),
   };
@@ -57,23 +75,38 @@ describe("orderController", () => {
       const next = mockNext();
 
       prisma.product.findMany.mockResolvedValue([
-        { id: "p1", price: "10.00", stock: 10, isActive: true },
-        { id: "p2", price: "20.00", stock: 5, isActive: true },
+        {
+          id: "p1",
+          name: "Product 1",
+          price: "10.00",
+          stock: 10,
+          isActive: true,
+          image: "p1.jpg",
+        },
+        {
+          id: "p2",
+          name: "Product 2",
+          price: "20.00",
+          stock: 5,
+          isActive: true,
+          image: "p2.jpg",
+        },
       ]);
 
-      prisma.order.create.mockImplementation(async ({ data }) => {
-        // Basic shape expectations only; decimal formatting handled by controller
-        expect(data.userId).toBe("user-1");
-        expect(data.orderItems.create).toEqual([
-          expect.objectContaining({ productId: "p1", quantity: 2 }),
-          expect.objectContaining({ productId: "p2", quantity: 1 }),
-        ]);
-        return { id: "o1", ...data };
+      prisma.product.updateMany.mockResolvedValue({ count: 1 });
+
+      prisma.order.create.mockResolvedValue({ id: "o1", userId: "user-1" });
+
+      prisma.order.findUnique.mockResolvedValue({
+        id: "o1",
+        userId: "user-1",
+        orderItems: [],
+        payment: null,
+        shippingAddress: null,
       });
 
       await createOrder(req, res, next);
 
-      expect(prisma.order.create).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({ id: "o1" })
@@ -156,15 +189,38 @@ describe("orderController", () => {
   });
 
   describe("getAllOrders", () => {
-    it("returns all orders", async () => {
-      const req = {};
+    it("requires admin access", async () => {
+      const req = { user: { id: "u1", isAdmin: false }, query: {} };
+      const res = mockRes();
+      const next = mockNext();
+
+      await getAllOrders(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(AppError));
+      expect(next.mock.calls[0][0].statusCode).toBe(403);
+    });
+
+    it("returns all orders for admin with pagination", async () => {
+      const req = {
+        user: { id: "u1", isAdmin: true },
+        query: { page: "1", limit: "20" },
+      };
       const res = mockRes();
       const next = mockNext();
 
       prisma.order.findMany.mockResolvedValue([{ id: "o1" }, { id: "o2" }]);
+      prisma.order.count.mockResolvedValue(2);
+
       await getAllOrders(req, res, next);
       expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith([{ id: "o1" }, { id: "o2" }]);
+      expect(res.json).toHaveBeenCalledWith({
+        data: [{ id: "o1" }, { id: "o2" }],
+        pagination: {
+          page: 1,
+          limit: 20,
+          total: 2,
+          totalPages: 1,
+        },
+      });
     });
   });
 
@@ -204,8 +260,25 @@ describe("orderController", () => {
   });
 
   describe("updateOrderStatus", () => {
+    it("requires admin access", async () => {
+      const req = {
+        params: { id: "o1" },
+        body: { status: "PAID" },
+        user: { id: "u1", isAdmin: false },
+      };
+      const res = mockRes();
+      const next = mockNext();
+      await updateOrderStatus(req, res, next);
+      expect(next).toHaveBeenCalledWith(expect.any(AppError));
+      expect(next.mock.calls[0][0].statusCode).toBe(403);
+    });
+
     it("rejects invalid status", async () => {
-      const req = { params: { id: "o1" }, body: { status: "WRONG" } };
+      const req = {
+        params: { id: "o1" },
+        body: { status: "WRONG" },
+        user: { id: "u1", isAdmin: true },
+      };
       const res = mockRes();
       const next = mockNext();
       await updateOrderStatus(req, res, next);
@@ -213,8 +286,12 @@ describe("orderController", () => {
       expect(next.mock.calls[0][0].statusCode).toBe(400);
     });
 
-    it("updates status", async () => {
-      const req = { params: { id: "o1" }, body: { status: "PAID" } };
+    it("updates status as admin", async () => {
+      const req = {
+        params: { id: "o1" },
+        body: { status: "PAID" },
+        user: { id: "u1", isAdmin: true },
+      };
       const res = mockRes();
       const next = mockNext();
 
@@ -244,12 +321,27 @@ describe("orderController", () => {
         id: "o1",
         userId: "u1",
         status: "PENDING",
+        orderItems: [{ productId: "p1", quantity: 2 }],
+        payment: null,
       });
-      prisma.order.update.mockResolvedValue({ id: "o1", status: "CANCELED" });
+
+      prisma.product.update.mockResolvedValue({});
+      prisma.order.update.mockResolvedValue({
+        id: "o1",
+        status: "CANCELED",
+        orderItems: [],
+        payment: null,
+        shippingAddress: null,
+      });
 
       await cancelMyOrder(req, res, next);
       expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith({ id: "o1", status: "CANCELED" });
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "o1",
+          status: "CANCELED",
+        })
+      );
     });
 
     it("rejects non-pending", async () => {

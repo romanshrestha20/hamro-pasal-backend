@@ -1,32 +1,48 @@
-import { Router } from "express";
+import express from "express";
 import {
   createOrder,
   getMyOrders,
-  getAllOrders,
   getOrderById,
+  getAllOrders,
   updateOrderStatus,
   cancelMyOrder,
 } from "../controllers/orderController.js";
-import { authEither, authorizeAdmin } from "../middlewares/authMiddleware.js";
 
-const router = Router();
+import {
+  createShippingAddress,
+  updateShippingAddress,
+  getShippingAddress,
+  deleteShippingAddress,
+} from "../controllers/shippingAddressController.js";
 
-// Create an order (authenticated user)
+import {
+  createPayment,
+  updatePaymentStatus,
+  getPaymentByOrder,
+  refundPayment,
+} from "../controllers/paymentController.js";
+import { authEither } from "../middlewares/authMiddleware.js";
+
+const router = express.Router();
+
+// Orders
 router.post("/", authEither, createOrder);
-
-// Get current user's orders
 router.get("/my", authEither, getMyOrders);
-
-// Get all orders (admin only)
-router.get("/", authEither, authorizeAdmin, getAllOrders);
-
-// Get order by id (owner or admin)
 router.get("/:id", authEither, getOrderById);
-
-// Update order status (admin only)
-router.patch("/:id/status", authEither, authorizeAdmin, updateOrderStatus);
-
-// Cancel my order (owner only, pending status)
+router.get("/", authEither, getAllOrders);
+router.patch("/:id/status", authEither, updateOrderStatus);
 router.patch("/:id/cancel", authEither, cancelMyOrder);
+
+// Shipping Address
+router.post("/:orderId/address", authEither, createShippingAddress);
+router.patch("/:orderId/address", authEither, updateShippingAddress);
+router.get("/:orderId/address", authEither, getShippingAddress);
+router.delete("/:orderId/address", authEither, deleteShippingAddress);
+
+// Payment
+router.post("/:orderId/payment", authEither, createPayment);
+router.patch("/:orderId/payment/status", authEither, updatePaymentStatus);
+router.get("/:orderId/payment", authEither, getPaymentByOrder);
+router.patch("/:orderId/payment/refund", authEither, refundPayment);
 
 export default router;

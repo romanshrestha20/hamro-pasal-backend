@@ -232,7 +232,7 @@ describe("Order Routes Integration Tests", () => {
     });
   });
 
-  describe("PATCH /api/orders/:orderId/payment/status", () => {
+  describe("PATCH /api/payments/:paymentId/status", () => {
     it("updates payment status", async () => {
       const token = generateToken({ id: "user-1" });
 

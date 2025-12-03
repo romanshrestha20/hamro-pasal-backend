@@ -1,24 +1,31 @@
+// controllers/paymentController.js
 import { prisma } from "../lib/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
 
 /**
  * POST /api/orders/:orderId/payment
- * Create a payment record
+ * Create a payment record (one per order)
  */
 export const createPayment = async (req, res, next) => {
   try {
-    const userId = req?.user?.id;
-    if (!userId) throw new AppError("Unauthorized", 401);
+    const user = req?.user;
+    if (!user?.id) throw new AppError("Unauthorized", 401);
 
     const { orderId } = req.params;
     const { provider, method, transactionId } = req.body;
 
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new AppError("Order not found", 404);
-    if (order.userId !== userId && !req?.user?.isAdmin)
-      throw new AppError("Forbidden", 403);
 
-    // Ensure only 1 payment per order
+    const isOwner = order.userId === user.id;
+    const isAdmin = !!user.isAdmin;
+    if (!isOwner && !isAdmin) throw new AppError("Forbidden", 403);
+
+    // Only allow payment on non-canceled orders
+    if (order.status === "CANCELED") {
+      throw new AppError("Cannot create payment for canceled order", 400);
+    }
+
     const existing = await prisma.payment.findUnique({
       where: { orderId },
     });
@@ -42,7 +49,8 @@ export const createPayment = async (req, res, next) => {
 
 /**
  * PATCH /api/orders/:orderId/payment/status
- * Update payment after gateway callback (user or webhook)
+ * Typically called from payment gateway or your server-side callback
+ * No auth enforced here by design; add auth if needed.
  */
 export const updatePaymentStatus = async (req, res, next) => {
   try {
@@ -50,8 +58,9 @@ export const updatePaymentStatus = async (req, res, next) => {
     const { status, transactionId } = req.body;
 
     const allowed = ["PENDING", "PAID", "FAILED", "REFUNDED"];
-    if (!allowed.includes(status))
+    if (!allowed.includes(status)) {
       throw new AppError("Invalid payment status", 400);
+    }
 
     const payment = await prisma.payment.findUnique({
       where: { orderId },
@@ -74,10 +83,21 @@ export const updatePaymentStatus = async (req, res, next) => {
 
 /**
  * GET /api/orders/:orderId/payment
+ * Owner or admin
  */
 export const getPaymentByOrder = async (req, res, next) => {
   try {
+    const user = req.user;
+    if (!user?.id) throw new AppError("Unauthorized", 401);
+
     const { orderId } = req.params;
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new AppError("Order not found", 404);
+
+    const isOwner = order.userId === user.id;
+    const isAdmin = !!user.isAdmin;
+    if (!isOwner && !isAdmin) throw new AppError("Forbidden", 403);
 
     const payment = await prisma.payment.findUnique({
       where: { orderId },
@@ -93,19 +113,21 @@ export const getPaymentByOrder = async (req, res, next) => {
 
 /**
  * PATCH /api/orders/:orderId/payment/refund
- * Admin-only refund operation
+ * Admin-only refund
  */
 export const refundPayment = async (req, res, next) => {
   try {
-    if (!req?.user?.isAdmin) throw new AppError("Forbidden", 403);
+    const isAdmin = !!req?.user?.isAdmin;
+    if (!isAdmin) throw new AppError("Forbidden", 403);
 
     const { orderId } = req.params;
 
     const payment = await prisma.payment.findUnique({ where: { orderId } });
     if (!payment) throw new AppError("Payment not found", 404);
 
-    if (payment.status !== "PAID")
+    if (payment.status !== "PAID") {
       throw new AppError("Only paid payments can be refunded", 400);
+    }
 
     const updated = await prisma.payment.update({
       where: { orderId },

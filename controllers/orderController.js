@@ -1,16 +1,17 @@
+// controllers/orderController.js
 import { prisma } from "../lib/prismaClient.js";
 import { Prisma } from "@prisma/client";
 import { AppError } from "../utils/AppError.js";
 
 /**
- * Configuration – adjust as you like
+ * CONFIG
  */
-const TAX_RATE = 0.15; // 15% tax
-const BASE_SHIPPING_FEE = new Prisma.Decimal(0); // flat fee, or set from env
+const TAX_RATE = 0.15; // 15%
+const BASE_SHIPPING_FEE = new Prisma.Decimal(0);
 const DEFAULT_DISCOUNT = new Prisma.Decimal(0);
 
 /**
- * Basic runtime validation for createOrder input
+ * Validate create order payload
  */
 const validateCreateOrderInput = (body) => {
   if (!body || typeof body !== "object") {
@@ -55,7 +56,7 @@ const validateCreateOrderInput = (body) => {
 };
 
 /**
- * Compute totals and build normalized orderItems data with product snapshots
+ * Compute totals & normalized orderItems array
  */
 const computeOrderTotals = async (items = []) => {
   const productIds = items.map((it) => it.productId);
@@ -98,8 +99,8 @@ const computeOrderTotals = async (items = []) => {
       productId: it.productId,
       quantity: qty,
       unitPrice,
-      discount: DEFAULT_DISCOUNT, // per-item discount placeholder
-      tax: new Prisma.Decimal(0), // can be used per line if you want
+      discount: DEFAULT_DISCOUNT,
+      tax: new Prisma.Decimal(0),
       subtotal: lineSubtotal,
       productName: product.name,
       productImage: product.image,
@@ -123,22 +124,33 @@ const computeOrderTotals = async (items = []) => {
 };
 
 /**
+ * Utility: ensure request user can access given order
+ */
+const assertCanAccessOrder = (order, user) => {
+  if (!order) throw new AppError("Order not found", 404);
+  const isOwner = order.userId === user?.id;
+  const isAdmin = !!user?.isAdmin;
+  if (!isOwner && !isAdmin) {
+    throw new AppError("Forbidden", 403);
+  }
+};
+
+/**
  * POST /api/orders
- * Create a new order from items + optional shipping address + optional payment
+ * Create a new order
  */
 export const createOrder = async (req, res, next) => {
   try {
-    const userId = req?.user?.id || req.body.userId;
+    const userId = req?.user?.id;
     if (!userId) throw new AppError("Unauthorized", 401);
 
     validateCreateOrderInput(req.body);
-
     const { items, shippingAddress, paymentMethod, paymentProvider } = req.body;
 
     const totals = await computeOrderTotals(items);
 
     const order = await prisma.$transaction(async (tx) => {
-      // Decrease stock safely (race-condition aware)
+      // decrement stock safely
       for (const item of totals.orderItemsData) {
         const updated = await tx.product.updateMany({
           where: {
@@ -158,7 +170,7 @@ export const createOrder = async (req, res, next) => {
         }
       }
 
-      // Create Order with nested OrderItems
+      // create order + items
       const createdOrder = await tx.order.create({
         data: {
           userId,
@@ -184,7 +196,7 @@ export const createOrder = async (req, res, next) => {
         },
       });
 
-      // Optional Shipping Address
+      // optional shipping
       if (shippingAddress) {
         await tx.shippingAddress.create({
           data: {
@@ -199,20 +211,19 @@ export const createOrder = async (req, res, next) => {
         });
       }
 
-      // Optional Payment (e.g. COD, STRIPE, ESEWA, etc.)
+      // optional payment (PENDING)
       if (paymentMethod || paymentProvider) {
         await tx.payment.create({
           data: {
             orderId: createdOrder.id,
             amount: totals.total,
-            status: "PENDING", // matches PaymentStatus enum
+            status: "PENDING",
             provider: paymentProvider || paymentMethod || "UNKNOWN",
             transactionId: null,
           },
         });
       }
 
-      // Return full order with relations
       const fullOrder = await tx.order.findUnique({
         where: { id: createdOrder.id },
         include: {
@@ -233,7 +244,7 @@ export const createOrder = async (req, res, next) => {
 
 /**
  * GET /api/orders/my
- * Get orders for logged-in user
+ * Get orders of logged-in user
  */
 export const getMyOrders = async (req, res, next) => {
   try {
@@ -258,7 +269,7 @@ export const getMyOrders = async (req, res, next) => {
 
 /**
  * GET /api/orders
- * Admin: get all orders (add admin middleware or check here)
+ * Admin: list all orders with pagination
  */
 export const getAllOrders = async (req, res, next) => {
   try {
@@ -307,7 +318,7 @@ export const getAllOrders = async (req, res, next) => {
 
 /**
  * GET /api/orders/:id
- * Owner or admin can view
+ * Owner or admin
  */
 export const getOrderById = async (req, res, next) => {
   try {
@@ -319,20 +330,17 @@ export const getOrderById = async (req, res, next) => {
         user: {
           select: { id: true, firstName: true, lastName: true, email: true },
         },
-        orderItems: { include: { product: true } },
+        orderItems: {
+          include: {
+            product: true, // optional; you can drop this if you rely purely on snapshots
+          },
+        },
         payment: true,
         shippingAddress: true,
       },
     });
 
-    if (!order) throw new AppError("Order not found", 404);
-
-    const isOwner = order.userId === req?.user?.id;
-    const isAdmin = !!req?.user?.isAdmin;
-
-    if (!isOwner && !isAdmin) {
-      throw new AppError("Forbidden", 403);
-    }
+    assertCanAccessOrder(order, req.user);
 
     res.status(200).json(order);
   } catch (error) {
@@ -342,7 +350,8 @@ export const getOrderById = async (req, res, next) => {
 
 /**
  * PATCH /api/orders/:id/status
- * Admin only – update order status
+ * Admin: update order status
+ * Status must be one of OrderStatus enum
  */
 export const updateOrderStatus = async (req, res, next) => {
   try {
@@ -354,7 +363,7 @@ export const updateOrderStatus = async (req, res, next) => {
 
     const allowedStatuses = [
       "PENDING",
-      "PAID",
+      "PROCESSING",
       "SHIPPED",
       "DELIVERED",
       "CANCELED",
@@ -382,7 +391,7 @@ export const updateOrderStatus = async (req, res, next) => {
 
 /**
  * PATCH /api/orders/:id/cancel
- * User cancels own order if still PENDING
+ * User cancels own PENDING order
  */
 export const cancelMyOrder = async (req, res, next) => {
   try {
@@ -403,7 +412,7 @@ export const cancelMyOrder = async (req, res, next) => {
     }
 
     const updatedOrder = await prisma.$transaction(async (tx) => {
-      // Restore stock
+      // restore stock
       for (const item of existing.orderItems) {
         await tx.product.update({
           where: { id: item.productId },
@@ -411,7 +420,6 @@ export const cancelMyOrder = async (req, res, next) => {
         });
       }
 
-      // Update order status
       const order = await tx.order.update({
         where: { id },
         data: { status: "CANCELED" },
@@ -421,14 +429,6 @@ export const cancelMyOrder = async (req, res, next) => {
           shippingAddress: true,
         },
       });
-
-      // (Optional) update payment status if needed – e.g. mark REFUNDED for prepaid
-      // if (order.payment && order.payment.status === "COMPLETED") {
-      //   await tx.payment.update({
-      //     where: { orderId: order.id },
-      //     data: { status: "REFUNDED" },
-      //   });
-      // }
 
       return order;
     });

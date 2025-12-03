@@ -302,135 +302,114 @@ describe("paymentController", () => {
     });
   });
 
-  describe("getPaymentByOrder", () => {
-    it("retrieves payment successfully", async () => {
-      const req = {
-        params: { orderId: "order-1" },
-      };
-      const res = mockRes();
-      const next = mockNext();
+ it("retrieves payment successfully", async () => {
+   const req = {
+     user: { id: "user-1", isAdmin: true },
+     params: { orderId: "order-1" },
+   };
+   const res = mockRes();
+   const next = mockNext();
 
-      prisma.payment.findUnique.mockResolvedValue({
-        id: "payment-1",
-        orderId: "order-1",
-        amount: "100.00",
-        status: "PAID",
-      });
+   prisma.payment.findUnique.mockResolvedValue({
+     id: "payment-1",
+     orderId: "order-1",
+     amount: "100.00",
+     status: "PAID",
+   });
 
-      await getPaymentByOrder(req, res, next);
+   await getPaymentByOrder(req, res, next);
 
-      expect(prisma.payment.findUnique).toHaveBeenCalledWith({
-        where: { orderId: "order-1" },
-      });
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: "payment-1",
-          orderId: "order-1",
-        })
-      );
-    });
+   expect(prisma.payment.findUnique).toHaveBeenCalledWith({
+     where: { orderId: "order-1" },
+   });
 
-    it("returns 404 when payment not found", async () => {
-      const req = {
-        params: { orderId: "order-999" },
-      };
-      const res = mockRes();
-      const next = mockNext();
+   expect(res.status).toHaveBeenCalledWith(200);
+ });
 
-      prisma.payment.findUnique.mockResolvedValue(null);
+ describe("refundPayment", () => {
+   it("refunds payment successfully as admin", async () => {
+     const req = {
+       user: { id: "admin-1", isAdmin: true },
+       params: { orderId: "order-1" },
+     };
+     const res = mockRes();
+     const next = mockNext();
 
-      await getPaymentByOrder(req, res, next);
+     prisma.payment.findUnique.mockResolvedValue({
+       id: "payment-1",
+       orderId: "order-1",
+       status: "PAID",
+     });
 
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-      expect(next.mock.calls[0][0].statusCode).toBe(404);
-    });
-  });
+     prisma.payment.update.mockResolvedValue({
+       id: "payment-1",
+       orderId: "order-1",
+       status: "REFUNDED",
+     });
 
-  describe("refundPayment", () => {
-    it("refunds payment successfully as admin", async () => {
-      const req = {
-        user: { id: "admin-1", isAdmin: true },
-        params: { orderId: "order-1" },
-      };
-      const res = mockRes();
-      const next = mockNext();
+     await refundPayment(req, res, next);
 
-      prisma.payment.findUnique.mockResolvedValue({
-        id: "payment-1",
-        orderId: "order-1",
-        status: "PAID",
-      });
+     expect(prisma.payment.update).toHaveBeenCalledWith({
+       where: { orderId: "order-1" },
+       data: { status: "REFUNDED" },
+     });
+     expect(res.status).toHaveBeenCalledWith(200);
+     expect(res.json).toHaveBeenCalledWith(
+       expect.objectContaining({
+         status: "REFUNDED",
+       })
+     );
+   });
 
-      prisma.payment.update.mockResolvedValue({
-        id: "payment-1",
-        orderId: "order-1",
-        status: "REFUNDED",
-      });
+   it("rejects when user is not admin", async () => {
+     const req = {
+       user: { id: "user-1", isAdmin: false },
+       params: { orderId: "order-1" },
+     };
+     const res = mockRes();
+     const next = mockNext();
 
-      await refundPayment(req, res, next);
+     await refundPayment(req, res, next);
 
-      expect(prisma.payment.update).toHaveBeenCalledWith({
-        where: { orderId: "order-1" },
-        data: { status: "REFUNDED" },
-      });
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: "REFUNDED",
-        })
-      );
-    });
+     expect(next).toHaveBeenCalledWith(expect.any(AppError));
+     expect(next.mock.calls[0][0].statusCode).toBe(403);
+   });
 
-    it("rejects when user is not admin", async () => {
-      const req = {
-        user: { id: "user-1", isAdmin: false },
-        params: { orderId: "order-1" },
-      };
-      const res = mockRes();
-      const next = mockNext();
+   it("returns 404 when payment not found", async () => {
+     const req = {
+       user: { id: "user-1", isAdmin: true },
+       params: { orderId: "order-999" },
+     };
+     const res = mockRes();
+     const next = mockNext();
 
-      await refundPayment(req, res, next);
+     prisma.payment.findUnique.mockResolvedValue(null);
 
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-      expect(next.mock.calls[0][0].statusCode).toBe(403);
-    });
+     await getPaymentByOrder(req, res, next);
 
-    it("rejects when payment not found", async () => {
-      const req = {
-        user: { id: "admin-1", isAdmin: true },
-        params: { orderId: "order-999" },
-      };
-      const res = mockRes();
-      const next = mockNext();
+     expect(next).toHaveBeenCalledWith(expect.any(AppError));
+     expect(next.mock.calls[0][0].statusCode).toBe(404);
+   });
 
-      prisma.payment.findUnique.mockResolvedValue(null);
+   it("rejects when payment is not in PAID status", async () => {
+     const req = {
+       user: { id: "admin-1", isAdmin: true },
+       params: { orderId: "order-1" },
+     };
+     const res = mockRes();
+     const next = mockNext();
 
-      await refundPayment(req, res, next);
+     prisma.payment.findUnique.mockResolvedValue({
+       id: "payment-1",
+       orderId: "order-1",
+       status: "PENDING",
+     });
 
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-      expect(next.mock.calls[0][0].statusCode).toBe(404);
-    });
+     await refundPayment(req, res, next);
 
-    it("rejects when payment is not in PAID status", async () => {
-      const req = {
-        user: { id: "admin-1", isAdmin: true },
-        params: { orderId: "order-1" },
-      };
-      const res = mockRes();
-      const next = mockNext();
-
-      prisma.payment.findUnique.mockResolvedValue({
-        id: "payment-1",
-        orderId: "order-1",
-        status: "PENDING",
-      });
-
-      await refundPayment(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-      expect(next.mock.calls[0][0].statusCode).toBe(400);
-      expect(next.mock.calls[0][0].message).toContain("Only paid payments");
-    });
-  });
+     expect(next).toHaveBeenCalledWith(expect.any(AppError));
+     expect(next.mock.calls[0][0].statusCode).toBe(400);
+     expect(next.mock.calls[0][0].message).toContain("Only paid payments");
+   });
+ });
 });

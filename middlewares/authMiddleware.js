@@ -103,7 +103,7 @@ export const authEither = async (req, res, next) => {
     if (PUBLIC_ROUTES.some((route) => cleanUrl.startsWith(route))) {
       return next(); // LET OTP ROUTES PASS
     }
-    console.log("authEither invoked for URL:", cleanUrl);
+
 
     // Cookie token exists?
     if (req.cookies?.token) {

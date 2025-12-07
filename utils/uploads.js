@@ -57,15 +57,19 @@ export const checkFileExists = (filename) => {
 
 // Utility function to delete file
 export const deleteFile = (filename) => {
+  if (!filename) return false;
+
   try {
-    const filePath = path.join(uploadsDir, filename);
+    const filePath = path.join(process.cwd(), "uploads", filename);
+
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
+      console.log("Deleted old image:", filename);
       return true;
     }
     return false;
-  } catch (error) {
-    console.error("Error deleting file:", error);
+  } catch (err) {
+    console.error("Error deleting file:", err);
     return false;
   }
 };

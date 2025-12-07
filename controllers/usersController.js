@@ -2,8 +2,10 @@ import e from "express";
 import { prisma } from "../lib/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
 import { updateUserSchema } from "../validators/userValidators.ts";
+import { deleteFile } from "../utils/uploads.js";
+import { mapImageToDto } from "../utils/imageMapper.js";
 
-const getBaseOrigin = (req) => {
+export const getBaseOrigin = (req) => {
   const proto = req?.headers?.["x-forwarded-proto"] || req?.protocol || "http";
   const forwardedHost = req?.headers?.["x-forwarded-host"];
   const headerHost = req?.headers?.host;
@@ -182,6 +184,7 @@ export const uploadUserProfileImage = async (req, res, next) => {
     if (!userExists) {
       return next(new AppError("User not found", 404));
     }
+    if (userExists.image) deleteFile(userExists.image);
 
     // Delete all existing images for this user
     const deleteResult = await prisma.image.deleteMany({
@@ -192,7 +195,7 @@ export const uploadUserProfileImage = async (req, res, next) => {
       `Deleted ${deleteResult.count} existing images for user ${userId}`
     );
 
-    // Create new image
+    // Create new image record
     const newImage = await prisma.image.create({
       data: {
         url: filename,
@@ -204,21 +207,14 @@ export const uploadUserProfileImage = async (req, res, next) => {
       where: { id: userId },
       data: { image: filename },
     });
-    const baseOrigin = getBaseOrigin(req);
-    const fileUrl = `${baseOrigin}/uploads/${newImage.url}`;
 
+    const dto = mapImageToDto(req, newImage);
     console.log("Successfully created image with userId:", newImage.userId);
 
     res.status(200).json({
       success: true,
       message: "Profile image uploaded successfully",
-      data: {
-        id: newImage.id,
-        url: fileUrl,
-        userId: newImage.userId,
-        createdAt: newImage.createdAt,
-        updatedAt: newImage.updatedAt,
-      },
+      data: dto,
     });
   } catch (error) {
     console.error("Upload profile image error:", error);
@@ -232,5 +228,44 @@ export const uploadUserProfileImage = async (req, res, next) => {
     }
 
     next(new AppError("Server error during image upload", 500));
+  }
+};
+
+export const removeUserProfileImage = async (req, res, next) => {
+  try {
+    // Get userId from URL params or from authenticated user
+    const userId = req.params.userId || req?.user?.id;
+
+    if (!userId) {
+      return next(new AppError("User not authenticated", 401));
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
+    if (user.image) deleteFile(user.image);
+    // Delete all existing images for this user
+    const deleteResult = await prisma.image.deleteMany({
+      where: { userId: userId },
+    });
+
+    // Also remove reference from User.image
+    await prisma.user.update({
+      where: { id: userId },
+      data: { image: null },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Deleted ${deleteResult.count} profile image(s) successfully`,
+      data: null,
+    });
+  } catch (error) {
+    console.error("Remove profile image error:", error);
+    next(new AppError("Server error during image removal", 500));
   }
 };

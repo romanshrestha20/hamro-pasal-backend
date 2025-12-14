@@ -16,6 +16,15 @@ const PORT = process.env.PORT || 4000;
     process.exit(1);
   }
 })();
+process.on("unhandledRejection", (err) => {
+  console.error("UNHANDLED REJECTION:", err);
+  server.close(() => process.exit(1));
+});
+
+process.on("SIGTERM", () => {
+  console.log("SIGTERM RECEIVED. Shutting down...");
+  server.close(() => process.exit(0));
+});
 
 // start server
 app.listen(PORT, () => {

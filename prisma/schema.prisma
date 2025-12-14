@@ -5,9 +5,10 @@ generator client {
 datasource db {
   provider          = "postgresql"
   url               = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
   // Use a separate shadow database to avoid P3006 errors when Prisma replays migrations for diffing
   // Create a separate empty database and set SHADOW_DATABASE_URL in .env
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  // shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model User {

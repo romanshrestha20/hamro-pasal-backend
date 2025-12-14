@@ -30,23 +30,9 @@ const allowedOrigins = [
   process.env.FRONTEND_ORIGIN_2,
 ].filter(Boolean);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow non-browser requests (e.g., curl, Postman) with no origin
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error(`CORS blocked for origin: ${origin}`));
-    },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    credentials: true,
-  })
-);
-app.set("trust proxy", 1); // trust first proxy
+// trust first proxy
+app.set("trust proxy", 1); 
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 // Logging middleware with request ID
 app.use(
   pinoHttp({
@@ -54,6 +40,8 @@ app.use(
     genReqId: (req) => req.headers["x-request-id"] || uuidv4(),
   })
 );
+
+// Security middlewares
 app.use(helmet());
 
 app.use(
@@ -62,17 +50,47 @@ app.use(
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => req.path === "/health",
   })
 );
+
+// CORS middleware configuration for dynamic origins
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow server-to-server, Postman, mobile apps
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    credentials: true,
+  })
+);
+
+// Body parsers for JSON and URL-encoded data
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
 // Example route
 app.get("/", (req, res) => {
   res.send("API is running...");
 });
-app.get("/api/test", (_req, res) => res.json({ message: "CORS works!" }));
+
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
 // Serve uploaded files statically (e.g., http://localhost:4000/uploads/<filename>)
 // Must be placed after CORS middleware to allow cross-origin image requests
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+if (process.env.NODE_ENV === "development") {
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+}
 
 // Use routes
 app.use("/api/users", userRoutes);

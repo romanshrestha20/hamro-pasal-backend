@@ -3,6 +3,10 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import path from "path";
 
+import pinoHttp from "pino-http";
+import logger from "./lib/logger.js";
+import { v4 as uuidv4 } from "uuid";
+
 // Import routes
 import userRoutes from "./routes/userRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -11,7 +15,6 @@ import favoriteRoutes from "./routes/favoriteRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
-
 
 import { errorHandler } from "./middlewares/errorMiddleware.js";
 const app = express();
@@ -62,7 +65,12 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/reviews", reviewRoutes);
 
-
+app.use(
+  pinoHttp({
+    logger,
+    genReqId: (req) => req.headers["x-request-id"] || uuidv4(),
+  })
+);
 
 // Handle 404 errors for undefined routes
 app.use((req, res, next) => {

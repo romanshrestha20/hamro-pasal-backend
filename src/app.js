@@ -6,6 +6,8 @@ import path from "path";
 import pinoHttp from "pino-http";
 import logger from "./lib/logger.js";
 import { v4 as uuidv4 } from "uuid";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 // Import routes
 import userRoutes from "./routes/userRoutes.js";
@@ -52,7 +54,16 @@ app.use(
     genReqId: (req) => req.headers["x-request-id"] || uuidv4(),
   })
 );
+app.use(helmet());
 
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
 // Example route
 app.get("/", (req, res) => {
   res.send("API is running...");

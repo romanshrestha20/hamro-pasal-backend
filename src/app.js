@@ -16,7 +16,7 @@ import orderRoutes from "./routes/orderRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 
-import { errorHandler } from "./middlewares/errorMiddleware.js";
+import errorHandler from "./middlewares/errorMiddleware.js";
 const app = express();
 
 // CORS: Allow multiple dev and deployment origins
@@ -40,11 +40,18 @@ app.use(
     credentials: true,
   })
 );
+app.set("trust proxy", 1); // trust first proxy
 
 app.use(express.json());
-app.set("trust proxy", 1); // trust first proxy if behind a proxy (e.g., Heroku)
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+// Logging middleware with request ID
+app.use(
+  pinoHttp({
+    logger,
+    genReqId: (req) => req.headers["x-request-id"] || uuidv4(),
+  })
+);
 
 // Example route
 app.get("/", (req, res) => {
@@ -65,12 +72,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/reviews", reviewRoutes);
 
-app.use(
-  pinoHttp({
-    logger,
-    genReqId: (req) => req.headers["x-request-id"] || uuidv4(),
-  })
-);
+
 
 // Handle 404 errors for undefined routes
 app.use((req, res, next) => {

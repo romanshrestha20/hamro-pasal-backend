@@ -58,10 +58,6 @@ export const getAllUsers = async (_req, res, next) => {
       },
     });
 
-    const profilePicture = user.image?.startsWith("https://res.cloudinary.com")
-      ? user.image
-      : undefined;
-
     const sanitizedUsers = users.map((u) => {
       const profilePicture = u.image?.startsWith("https://res.cloudinary.com")
         ? u.image

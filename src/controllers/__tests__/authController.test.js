@@ -376,7 +376,7 @@ describe("AuthController", () => {
       lastName: "Doe",
       phone: "1234567890",
       address: "123 Test St",
-      image: "avatar.jpg",
+      image: "https://res.cloudinary.com/demo/image/upload/avatar.jpg",
       isAdmin: false,
     };
 
@@ -412,7 +412,8 @@ describe("AuthController", () => {
           phone: "1234567890",
           address: "123 Test St",
           isAdmin: false,
-          profilePicture: expect.stringContaining("/uploads/avatar.jpg"),
+          profilePicture:
+            "https://res.cloudinary.com/demo/image/upload/avatar.jpg",
         })
       );
     });

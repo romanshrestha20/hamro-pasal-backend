@@ -1,4 +1,4 @@
-import { errorHandler } from "../errorMiddleware.js";
+import errorHandler from "../errorMiddleware.js";
 import { AppError } from "../../utils/AppError.js";
 
 describe("Error Middleware", () => {
@@ -190,17 +190,7 @@ describe("Error Middleware", () => {
       process.env.NODE_ENV = originalEnv;
     });
 
-    it("should log error name and message to console", () => {
-      const error = new Error("Test error");
-      error.name = "TestError";
-
-      errorHandler(error, req, res, next);
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith("Error name:", "TestError");
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "Error message:",
-        "Test error"
-      );
-    });
+    // Removed test: "should log error name and message to console"
+    // Logging is now handled by Pino logger, not console.error
   });
 });

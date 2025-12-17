@@ -57,7 +57,7 @@ describe("UsersController", () => {
       email: "john@example.com",
       phone: "1234567890",
       address: "123 Test St",
-      image: "avatar.jpg",
+      image: "https://res.cloudinary.com/demo/image/upload/avatar.jpg",
       isAdmin: false,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -95,7 +95,9 @@ describe("UsersController", () => {
           phone: "1234567890",
           address: "123 Test St",
           isAdmin: false,
-          profilePicture: expect.stringContaining("/uploads/avatar.jpg"),
+          image: "https://res.cloudinary.com/demo/image/upload/avatar.jpg",
+          profilePicture:
+            "https://res.cloudinary.com/demo/image/upload/avatar.jpg",
         })
       );
     });
@@ -133,7 +135,7 @@ describe("UsersController", () => {
         email: "john@example.com",
         phone: "1234567890",
         address: "123 Test St",
-        image: "avatar1.jpg",
+        image: "https://res.cloudinary.com/demo/image/upload/avatar1.jpg",
         isAdmin: false,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -145,7 +147,7 @@ describe("UsersController", () => {
         email: "jane@example.com",
         phone: "0987654321",
         address: "456 Test Ave",
-        image: "avatar2.jpg",
+        image: "https://res.cloudinary.com/demo/image/upload/avatar2.jpg",
         isAdmin: true,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -176,11 +178,15 @@ describe("UsersController", () => {
         expect.arrayContaining([
           expect.objectContaining({
             id: "1",
-            profilePicture: expect.stringContaining("/uploads/avatar1.jpg"),
+            image: "https://res.cloudinary.com/demo/image/upload/avatar1.jpg",
+            profilePicture:
+              "https://res.cloudinary.com/demo/image/upload/avatar1.jpg",
           }),
           expect.objectContaining({
             id: "2",
-            profilePicture: expect.stringContaining("/uploads/avatar2.jpg"),
+            image: "https://res.cloudinary.com/demo/image/upload/avatar2.jpg",
+            profilePicture:
+              "https://res.cloudinary.com/demo/image/upload/avatar2.jpg",
           }),
         ])
       );
@@ -333,55 +339,48 @@ describe("UsersController", () => {
 
   describe("uploadUserProfileImage", () => {
     const mockFile = {
-      filename: "test-image.jpg",
-      path: "/uploads/test-image.jpg",
-    };
-
-    const mockUser = {
-      id: "1",
-      email: "test@example.com",
+      filename: "cloudinary-public-id",
+      path: "https://res.cloudinary.com/demo/image/upload/v123/avatar.jpg",
     };
 
     const mockImage = {
       id: "1",
-      url: mockFile.filename,
+      url: mockFile.path,
+      publicId: mockFile.filename,
       userId: "1",
     };
 
     it("should upload profile image successfully", async () => {
       req.user = { id: "1" };
       req.file = mockFile;
-      req.headers = { host: "localhost:4000" };
-      req.get = jest.fn(() => "localhost:4000");
 
-      prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.image.deleteMany.mockResolvedValue({ count: 0 });
       prisma.image.create.mockResolvedValue(mockImage);
       prisma.user.update.mockResolvedValue({});
 
       await uploadUserProfileImage(req, res, next);
 
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({
-        where: { id: "1" },
-      });
-      expect(prisma.image.deleteMany).toHaveBeenCalledWith({
-        where: { userId: "1" },
-      });
       expect(prisma.image.create).toHaveBeenCalledWith({
         data: {
-          url: mockFile.filename,
+          url: mockFile.path,
+          publicId: mockFile.filename,
           userId: "1",
+        },
+      });
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "1" },
+        data: {
+          image: mockFile.path,
+          imagePublicId: mockFile.filename,
         },
       });
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         success: true,
         message: "Profile image uploaded successfully",
-        data: expect.objectContaining({
-          id: mockImage.id,
-          userId: mockImage.userId,
-          url: expect.stringContaining("/uploads/" + mockFile.filename),
-        }),
+        data: {
+          url: mockFile.path,
+          publicId: mockFile.filename,
+        },
       });
     });
 
@@ -405,76 +404,11 @@ describe("UsersController", () => {
       expect(next.mock.calls[0][0].message).toBe("No file uploaded");
     });
 
-    it("should return error if user not found", async () => {
-      req.user = { id: "999" };
-      req.file = mockFile;
-
-      prisma.user.findUnique.mockResolvedValue(null);
-
-      await uploadUserProfileImage(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-      expect(next.mock.calls[0][0].message).toBe("User not found");
-    });
-
-    it("should delete existing images before creating new one", async () => {
+    it("should handle errors during upload", async () => {
       req.user = { id: "1" };
       req.file = mockFile;
 
-      prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.image.deleteMany.mockResolvedValue({ count: 2 }); // Deleted 2 images
-      prisma.image.create.mockResolvedValue(mockImage);
-
-      await uploadUserProfileImage(req, res, next);
-
-      expect(prisma.image.deleteMany).toHaveBeenCalledWith({
-        where: { userId: "1" },
-      });
-      expect(prisma.image.create).toHaveBeenCalled();
-    });
-
-    it("should handle duplicate image error", async () => {
-      req.user = { id: "1" };
-      req.file = mockFile;
-
-      prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.image.deleteMany.mockResolvedValue({ count: 0 });
-
-      const error = new Error("Unique constraint failed");
-      error.code = "P2002";
-      prisma.image.create.mockRejectedValue(error);
-
-      await uploadUserProfileImage(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-      expect(next.mock.calls[0][0].message).toBe("Image already exists");
-    });
-
-    it("should handle invalid user reference error", async () => {
-      req.user = { id: "1" };
-      req.file = mockFile;
-
-      prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.image.deleteMany.mockResolvedValue({ count: 0 });
-
-      const error = new Error("Foreign key constraint failed");
-      error.code = "P2003";
-      prisma.image.create.mockRejectedValue(error);
-
-      await uploadUserProfileImage(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(AppError));
-      expect(next.mock.calls[0][0].message).toBe("Invalid user reference");
-    });
-
-    it("should handle general server errors", async () => {
-      req.user = { id: "1" };
-      req.file = mockFile;
-
-      prisma.user.findUnique.mockResolvedValue(mockUser);
-      prisma.image.deleteMany.mockResolvedValue({ count: 0 });
-
-      const error = new Error("Server error");
+      const error = new Error("Database error");
       prisma.image.create.mockRejectedValue(error);
 
       await uploadUserProfileImage(req, res, next);

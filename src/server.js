@@ -17,6 +17,11 @@ const PORT = env.PORT || 5000;
     process.exit(1);
   }
 })();
+// start server
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
+
 process.on("unhandledRejection", (err) => {
   console.error("UNHANDLED REJECTION:", err);
   server.close(() => process.exit(1));
@@ -25,9 +30,4 @@ process.on("unhandledRejection", (err) => {
 process.on("SIGTERM", () => {
   console.log("SIGTERM RECEIVED. Shutting down...");
   server.close(() => process.exit(0));
-});
-
-// start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

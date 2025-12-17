@@ -1,21 +1,7 @@
-import e from "express";
 import { prisma } from "../lib/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
 import { updateUserSchema } from "../validators/userValidators.ts";
-import { deleteFile } from "../utils/uploads.js";
-import { mapImageToDto } from "../utils/imageMapper.js";
-
-export const getBaseOrigin = (req) => {
-  const proto = req?.headers?.["x-forwarded-proto"] || req?.protocol || "http";
-  const forwardedHost = req?.headers?.["x-forwarded-host"];
-  const headerHost = req?.headers?.host;
-  let host = forwardedHost || headerHost;
-  if (!host && typeof req?.get === "function") {
-    host = req.get("host");
-  }
-  if (!host) host = "localhost:4000"; // sensible default for tests/dev
-  return `${proto}://${host}`;
-};
+import cloudinary from "../lib/cloudinary.js";
 
 // --- GET SINGLE USER ---
 export const getUserById = async (req, res, next) => {
@@ -37,26 +23,19 @@ export const getUserById = async (req, res, next) => {
         updatedAt: true,
       },
     });
+
     if (!user) throw new AppError("User not found", 404);
-    const origin = getBaseOrigin(req);
-    const profilePicture = user.image
-      ? `${origin}/uploads/${user.image}`
+
+    const profilePicture = user.image?.startsWith("https://res.cloudinary.com")
+      ? user.image
       : undefined;
 
     res.status(200).json({
-      id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      phone: user.phone,
-      address: user.address,
-      isAdmin: user.isAdmin,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      ...user,
       profilePicture,
     });
+    console.log("User image URL:", user.image);
   } catch (error) {
-    console.error(error);
     next(error);
   }
 };
@@ -78,21 +57,22 @@ export const getAllUsers = async (_req, res, next) => {
         updatedAt: true,
       },
     });
-    const origin = getBaseOrigin(_req);
-    const mapped = users.map((u) => ({
-      id: u.id,
-      firstName: u.firstName,
-      lastName: u.lastName,
-      email: u.email,
-      phone: u.phone,
-      address: u.address,
-      isAdmin: u.isAdmin,
-      createdAt: u.createdAt,
-      updatedAt: u.updatedAt,
-      profilePicture: u.image ? `${origin}/uploads/${u.image}` : undefined,
-    }));
 
-    res.status(200).json(mapped);
+    const profilePicture = user.image?.startsWith("https://res.cloudinary.com")
+      ? user.image
+      : undefined;
+
+    const sanitizedUsers = users.map((u) => {
+      const profilePicture = u.image?.startsWith("https://res.cloudinary.com")
+        ? u.image
+        : undefined;
+      return {
+        ...u,
+        profilePicture,
+      };
+    });
+
+    res.status(200).json(sanitizedUsers);
   } catch (error) {
     console.error(error);
     next(error);
@@ -161,75 +141,37 @@ export const updateUser = async (req, res, next) => {
 
 export const uploadUserProfileImage = async (req, res, next) => {
   try {
-    console.log("Request user object:", req.user); // Debug log
+    const userId = req.user?.id;
+    if (!userId) return next(new AppError("User not authenticated", 401));
+    if (!req.file) return next(new AppError("No file uploaded", 400));
 
-    const userId = req?.user?.id;
+    console.log("Uploaded file object:", req.file);
 
-    if (!userId) {
-      console.error("No user ID found in request");
-      return next(new AppError("User not authenticated", 401));
-    }
+    const imageUrl = req.file.path;    // Cloudinary URL
+    const publicId = req.file.filename; // Cloudinary public ID
 
-    if (!req.file) {
-      return next(new AppError("No file uploaded", 400));
-    }
-
-    const { filename } = req.file;
-
-    // Verify user exists (double check)
-    const userExists = await prisma.user.findUnique({
-      where: { id: userId },
+    // Update Image table
+    await prisma.image.create({
+      data: { url: imageUrl, publicId, userId },
     });
 
-    if (!userExists) {
-      return next(new AppError("User not found", 404));
-    }
-    if (userExists.image) deleteFile(userExists.image);
-
-    // Delete all existing images for this user
-    const deleteResult = await prisma.image.deleteMany({
-      where: { userId: userId },
-    });
-
-    console.log(
-      `Deleted ${deleteResult.count} existing images for user ${userId}`
-    );
-
-    // Create new image record
-    const newImage = await prisma.image.create({
-      data: {
-        url: filename,
-        userId: userId,
-      },
-    });
-    // Also persist on User.image for easy access in auth/me
+    // Update User record
     await prisma.user.update({
       where: { id: userId },
-      data: { image: filename },
+      data: { image: imageUrl, imagePublicId: publicId },
     });
-
-    const dto = mapImageToDto(req, newImage);
-    console.log("Successfully created image with userId:", newImage.userId);
 
     res.status(200).json({
       success: true,
       message: "Profile image uploaded successfully",
-      data: dto,
+      data: { url: imageUrl, publicId },
     });
   } catch (error) {
     console.error("Upload profile image error:", error);
-
-    if (error.code === "P2002") {
-      return next(new AppError("Image already exists", 400));
-    }
-
-    if (error.code === "P2003") {
-      return next(new AppError("Invalid user reference", 400));
-    }
-
     next(new AppError("Server error during image upload", 500));
   }
 };
+
 
 export const removeUserProfileImage = async (req, res, next) => {
   try {
@@ -247,7 +189,10 @@ export const removeUserProfileImage = async (req, res, next) => {
       return next(new AppError("User not found", 404));
     }
 
-    if (user.image) deleteFile(user.image);
+    if (user.imagePublicId) {
+      await cloudinary.uploader.destroy(user.imagePublicId);
+    }
+
     // Delete all existing images for this user
     const deleteResult = await prisma.image.deleteMany({
       where: { userId: userId },
@@ -256,9 +201,11 @@ export const removeUserProfileImage = async (req, res, next) => {
     // Also remove reference from User.image
     await prisma.user.update({
       where: { id: userId },
-      data: { image: null },
+      data: {
+        image: null,
+        imagePublicId: null,
+      },
     });
-
     res.status(200).json({
       success: true,
       message: `Deleted ${deleteResult.count} profile image(s) successfully`,

@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import path from "path";
 
 import pinoHttp from "pino-http";
 import logger from "./lib/logger.js";
@@ -31,7 +30,7 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 // trust first proxy
-app.set("trust proxy", 1); 
+app.set("trust proxy", 1);
 
 // Logging middleware with request ID
 app.use(
@@ -50,7 +49,6 @@ app.use(
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => req.path === "/health",
   })
 );
 
@@ -86,11 +84,7 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-// Serve uploaded files statically (e.g., http://localhost:4000/uploads/<filename>)
-// Must be placed after CORS middleware to allow cross-origin image requests
-if (process.env.NODE_ENV === "development") {
-  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
-}
+
 
 // Use routes
 app.use("/api/users", userRoutes);

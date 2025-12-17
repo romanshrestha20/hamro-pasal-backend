@@ -17,18 +17,7 @@ import {
 
 // Resolve JWT secret at call time to allow tests to override env per test
 
-// Build the public origin from request (works behind proxies/CDNs)
-const getBaseOrigin = (req) => {
-  const proto = req?.headers?.["x-forwarded-proto"] || req?.protocol || "http";
-  const forwardedHost = req?.headers?.["x-forwarded-host"];
-  const headerHost = req?.headers?.host;
-  let host = forwardedHost || headerHost;
-  if (!host && typeof req?.get === "function") {
-    host = req.get("host");
-  }
-  if (!host) host = "localhost:4000";
-  return `${proto}://${host}`;
-};
+
 
 // ----------------------------
 // Register User
@@ -294,10 +283,9 @@ export const getCurrentUser = async (req, res, next) => {
 
     if (!user) return next(new AppError("User not found", 404));
 
-    const origin = getBaseOrigin(req);
-    const profileUrl = user.image
-      ? `${origin}/uploads/${user.image}`
-      : undefined;
+    // Image is already a full Cloudinary URL (from CloudinaryStorage)
+    // No need to prepend /uploads/
+    const profileUrl = user.image;
 
     res.status(200).json({
       id: user.id,

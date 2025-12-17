@@ -23,6 +23,7 @@ model User {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   image               String?              @db.Text
+  imagePublicId       String?              @db.Text
 
   favorites           Favorite[]
   images              Image[]
@@ -263,6 +264,7 @@ model Favorite {
 model Image {
   id        String   @id @default(uuid())
   url       String
+    publicId  String?
   productId String?
   userId    String?
   reviewId  String?

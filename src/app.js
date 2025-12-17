@@ -49,6 +49,7 @@ app.use(
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => req.path === "/health" || req.path === "/",
   })
 );
 
@@ -63,16 +64,17 @@ app.use(
         return callback(null, true);
       }
 
-      return callback(new Error(`CORS blocked for origin: ${origin}`));
+      // Return false instead of error for better error handling
+      callback(null, false);
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   })
 );
 
-// Body parsers for JSON and URL-encoded data
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parsers for JSON and URL-encoded data with size limits
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
 // Example route

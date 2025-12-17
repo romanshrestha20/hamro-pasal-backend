@@ -1,9 +1,10 @@
 import app from "./app.js";
-import dotenv from "dotenv";
+import "./config/env.ts";
 import { prisma } from "./lib/prismaClient.js";
 
-dotenv.config();
-const PORT = process.env.PORT || 4000;
+import { env } from "./config/validateEnv.js";
+
+const PORT = env.PORT || 5000;
 
 // check database connection
 

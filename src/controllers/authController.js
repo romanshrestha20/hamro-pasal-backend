@@ -189,6 +189,7 @@ export const changeUserPassword = async (req, res, next) => {
       console.log("Validation errors:", validationResult.error.errors);
       return next(validationResult.error);
     }
+    // if user has no password previously set(e.g., OAuth users)
 
     const { oldPassword, newPassword } = validationResult.data;
     const userId = req.user.userId;
@@ -205,6 +206,23 @@ export const changeUserPassword = async (req, res, next) => {
       return next(new AppError("User not found", 404));
     }
 
+    // 🟡 CASE 1: OAuth user (no password set yet)
+    if (!user.password) {
+      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { password: hashedNewPassword },
+      });
+      return res.status(200).json({
+        success: true,
+        message: "Password set successfully",
+      });
+    }
+    // 🟢 CASE 2: Regular user (password change)
+    if (!oldPassword) {
+      return next(new AppError("Old password is required", 400));
+    }
     // Verify old password
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {

@@ -40,7 +40,7 @@ export const userEmailParamSchema = z.object({
 export type UserEmailParam = z.infer<typeof userEmailParamSchema>;
 
 export const changePasswordSchema = z.object({
-  oldPassword: z.string().min(1, "Old password is required"),
+  oldPassword: z.string().min(1, "Old password is required").optional(),
   newPassword: z.string().min(6, "New password must be at least 6 characters"),
 }).strict();
 

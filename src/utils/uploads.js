@@ -33,3 +33,22 @@ export const upload = multer({
   fileFilter: fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 }, // limit file size to 5MB
 });
+
+// Multer error handler middleware
+export const handleMulterError = (err, req, res, next) => {
+  console.error('❌ Multer/Cloudinary error:', err);
+  console.error('Error stack:', err.stack);
+  
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+    }
+    return res.status(400).json({ error: `Upload error: ${err.message}` });
+  }
+  
+  if (err) {
+    return res.status(500).json({ error: err.message || 'Error uploading file to Cloudinary' });
+  }
+  
+  next();
+};

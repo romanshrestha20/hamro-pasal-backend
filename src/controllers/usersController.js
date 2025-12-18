@@ -145,7 +145,6 @@ export const uploadUserProfileImage = async (req, res, next) => {
 
     const imageUrl = req.file.path;    // Cloudinary URL
     const publicId = req.file.filename; // Cloudinary public ID
-
     // Update Image table
     await prisma.image.create({
       data: { url: imageUrl, publicId, userId },
@@ -164,7 +163,9 @@ export const uploadUserProfileImage = async (req, res, next) => {
     });
   } catch (error) {
     console.error("Upload profile image error:", error);
-    next(new AppError("Server error during image upload", 500));
+    console.error("Error stack:", error.stack);
+    console.error("Error details:", JSON.stringify(error, null, 2));
+    next(new AppError(error.message || "Server error during image upload", 500));
   }
 };
 

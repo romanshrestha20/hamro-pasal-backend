@@ -9,7 +9,7 @@ import {
 } from "../controllers/usersController.js";
 
 import { authEither, authorizeAdmin } from "../middlewares/authMiddleware.js";
-import { upload } from "../utils/uploads.js";
+import { upload, handleMulterError } from "../utils/uploads.js";
 
 const router = express.Router();
 
@@ -21,6 +21,7 @@ router.post(
   "/upload",
   authEither,
   upload.single("image"),
+  handleMulterError,
   uploadUserProfileImage
 );
 router.delete("/image", authEither, removeUserProfileImage);

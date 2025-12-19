@@ -24,6 +24,7 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
+  "https://hamro-pasal-frontend-1dqm.vercel.app/",
   process.env.FRONTEND_ORIGIN,
   process.env.FRONTEND_ORIGIN_1,
   process.env.FRONTEND_ORIGIN_2,

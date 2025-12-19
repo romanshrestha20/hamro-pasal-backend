@@ -165,7 +165,7 @@ export const uploadUserProfileImage = async (req, res, next) => {
     console.error("Upload profile image error:", error);
     console.error("Error stack:", error.stack);
     console.error("Error details:", JSON.stringify(error, null, 2));
-    next(new AppError(error.message || "Server error during image upload", 500));
+    next(new AppError("Server error during image upload", 500));
   }
 };
 

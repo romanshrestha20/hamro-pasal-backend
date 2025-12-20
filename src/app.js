@@ -24,7 +24,14 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
+  // Production/pinned preview
   "https://hamro-pasal-frontend-1dqm.vercel.app",
+  // Current preview deployment
+  "https://hamro-pasal-frontend-1dqm-k9h8k8eq6-romanshrestha20s-projects.vercel.app",
+  process.env.FRONTEND_URL,
+  process.env.FRONTEND_ORIGIN,
+  process.env.FRONTEND_ORIGIN_1,
+  process.env.FRONTEND_ORIGIN_2,
 ].filter(Boolean);
 
 // trust first proxy

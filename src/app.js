@@ -24,9 +24,7 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
-  // Production/pinned preview
   "https://hamro-pasal-frontend-1dqm.vercel.app",
-  // Current preview deployment
   "https://hamro-pasal-frontend-1dqm-k9h8k8eq6-romanshrestha20s-projects.vercel.app",
   process.env.FRONTEND_URL,
   process.env.FRONTEND_ORIGIN,
@@ -62,18 +60,19 @@ app.use(
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow server-to-server, Postman, mobile apps
+      // Allow server-to-server requests or Postman (no origin)
       if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
-      // Return false instead of error for better error handling
-      callback(null, false);
+      // Reject unknown origins explicitly
+      return callback(new Error(`CORS policy: Origin ${origin} not allowed`));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    credentials: true,
+    credentials: true, // important for cookies / auth headers
+    optionsSuccessStatus: 200, // for legacy browsers
   })
 );
 

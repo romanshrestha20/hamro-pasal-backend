@@ -26,11 +26,11 @@ const allowedOrigins = [
   "http://127.0.0.1:3000",
   "https://hamro-pasal-frontend-1dqm.vercel.app",
   "https://hamro-pasal-frontend-1dqm-k9h8k8eq6-romanshrestha20s-projects.vercel.app",
+  "https://hamro-pasal-frontend-1dqm-3zaz8dt17-romanshrestha20s-projects.vercel.app", // add this one!
   process.env.FRONTEND_URL,
   process.env.FRONTEND_ORIGIN,
-  process.env.FRONTEND_ORIGIN_1,
-  process.env.FRONTEND_ORIGIN_2,
 ].filter(Boolean);
+
 
 // trust first proxy
 app.set("trust proxy", 1);

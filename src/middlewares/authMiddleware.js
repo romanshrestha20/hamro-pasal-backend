@@ -1,9 +1,8 @@
 import jwt from "jsonwebtoken";
-import { prisma } from "../lib/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
+import dotenv from "dotenv";
 
-
-
+dotenv.config();
 
 export const authenticate = async (req, res, next) => {
   try {
@@ -95,7 +94,6 @@ const PUBLIC_ROUTES = [
   "/api/auth/reset-password",
 ];
 
-
 export const authEither = async (req, res, next) => {
   try {
     const cleanUrl = req.originalUrl.split("?")[0];
@@ -103,7 +101,6 @@ export const authEither = async (req, res, next) => {
     if (PUBLIC_ROUTES.some((route) => cleanUrl.startsWith(route))) {
       return next(); // LET OTP ROUTES PASS
     }
-
 
     // Cookie token exists?
     if (req.cookies?.token) {
@@ -121,4 +118,3 @@ export const authEither = async (req, res, next) => {
     next(err);
   }
 };
-

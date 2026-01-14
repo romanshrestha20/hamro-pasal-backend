@@ -4,7 +4,7 @@ import { prisma } from "./lib/prismaClient.js";
 
 import { env } from "./config/validateEnv.js";
 
-const PORT = env.PORT || 5000;
+const PORT = 5002;
 
 // check database connection
 
